@@ -1,0 +1,30 @@
+[
+  {
+    "social_set_id": 123,
+    "platforms": {
+      "x": {
+        "enabled": true,
+        "posts": [
+          {
+            "text": "Batch draft 1"
+          }
+        ]
+      }
+    },
+    "draft_title": "Batch item 1"
+  },
+  {
+    "social_set_id": 123,
+    "platforms": {
+      "threads": {
+        "enabled": true,
+        "posts": [
+          {
+            "text": "Batch draft 2"
+          }
+        ]
+      }
+    },
+    "publish_at": "2026-04-05T09:00:00Z"
+  }
+]

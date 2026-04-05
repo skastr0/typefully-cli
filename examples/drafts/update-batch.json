@@ -1,0 +1,14 @@
+[
+  {
+    "social_set_id": 123,
+    "draft_id": 987,
+    "draft_title": "Batch updated draft",
+    "publish_at": "now"
+  },
+  {
+    "social_set_id": 123,
+    "draft_id": 654,
+    "tags": ["retry"],
+    "publish_at": "2026-04-05T09:00:00Z"
+  }
+]

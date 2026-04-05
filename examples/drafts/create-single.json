@@ -1,0 +1,24 @@
+{
+  "social_set_id": 123,
+  "platforms": {
+    "x": {
+      "enabled": true,
+      "posts": [
+        {
+          "text": "Hello from the Typefully CLI"
+        }
+      ]
+    },
+    "linkedin": {
+      "enabled": true,
+      "posts": [
+        {
+          "text": "Hello from the Typefully CLI"
+        }
+      ]
+    }
+  },
+  "draft_title": "CLI example",
+  "tags": ["cli", "example"],
+  "publish_at": "next-free-slot"
+}

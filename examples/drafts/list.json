@@ -1,0 +1,8 @@
+{
+  "social_set_id": 123,
+  "status": "draft",
+  "tag": "queue",
+  "order_by": "-updated_at",
+  "limit": 10,
+  "offset": 0
+}

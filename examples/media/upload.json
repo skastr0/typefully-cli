@@ -1,0 +1,7 @@
+{
+  "social_set_id": 123,
+  "file_path": "./path/to/your/image.png",
+  "wait_for_ready": true,
+  "timeout_seconds": 60,
+  "poll_interval_ms": 2000
+}

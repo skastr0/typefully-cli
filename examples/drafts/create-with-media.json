@@ -1,0 +1,15 @@
+{
+  "social_set_id": 123,
+  "platforms": {
+    "x": {
+      "enabled": true,
+      "posts": [
+        {
+          "text": "Draft with an uploaded media attachment",
+          "media_ids": ["replace-with-returned-media-id"]
+        }
+      ]
+    }
+  },
+  "draft_title": "Draft with media"
+}
