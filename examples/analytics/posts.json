@@ -1,0 +1,9 @@
+{
+  "social_set_id": 123,
+  "platform": "x",
+  "start_date": "2026-03-01",
+  "end_date": "2026-03-31",
+  "include_replies": true,
+  "limit": 10,
+  "offset": 5
+}
