@@ -1,0 +1,10 @@
+{
+  "social_set_id": 123,
+  "rules": [
+    {
+      "h": 9,
+      "m": 30,
+      "days": ["mon", "wed", "fri"]
+    }
+  ]
+}
