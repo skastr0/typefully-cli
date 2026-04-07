@@ -62,6 +62,12 @@ bun run dev drafts create @examples/drafts/create-batch.json --concurrency 2
 # batch draft update
 bun run dev drafts update @examples/drafts/update-batch.json --concurrency 2
 
+# post analytics for X in a date range
+bun run dev analytics posts @examples/analytics/posts.json
+
+# resolve a LinkedIn company URL into mention-ready metadata
+bun run dev linkedin organizations resolve @examples/linkedin/organizations-resolve.json
+
 # media upload with polling until ready
 bun run dev media upload @examples/media/upload.json
 
@@ -84,6 +90,36 @@ Example draft payload with an uploaded attachment:
         {
           "text": "Draft with an uploaded media attachment",
           "media_ids": ["media-id-from-media-upload"]
+        }
+      ]
+    }
+  }
+}
+```
+
+`linkedin organizations resolve` returns a `mention_text` field. Paste that value directly into your LinkedIn draft text:
+
+```json
+{
+  "id": "987654",
+  "urn": "urn:li:organization:987654",
+  "mention_text": "@[Typefully](urn:li:organization:987654)",
+  "name": "Typefully",
+  "url": "https://www.linkedin.com/company/typefullycom/"
+}
+```
+
+Then use that `mention_text` value as-is in your draft payload:
+
+```json
+{
+  "social_set_id": 123,
+  "platforms": {
+    "linkedin": {
+      "enabled": true,
+      "posts": [
+        {
+          "text": "Thanks @[Typefully](urn:li:organization:987654) for the support."
         }
       ]
     }

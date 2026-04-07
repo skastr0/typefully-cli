@@ -1,11 +1,16 @@
-import { Command, Options } from "@effect/cli"
-import { Effect, Option } from "effect"
+import { Args, Command, Options } from "@effect/cli"
+import { Effect, Option, Schema } from "effect"
 
 import { CommandInputError } from "../core/errors"
+import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
-import { listSocialSets } from "../core/typefully"
+import { getSocialSet, listSocialSets, TypefullyIdentifierSchema } from "../core/typefully"
 
 const toUndefined = <A>(value: Option.Option<A>) => (Option.isSome(value) ? value.value : undefined)
+
+const jsonInputArg = Args.text({ name: "input" }).pipe(
+  Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
+)
 
 const limitOption = Options.integer("limit").pipe(
   Options.optional,
@@ -43,6 +48,10 @@ const validatePagination = (field: "limit" | "offset", value: number | undefined
   return Effect.void
 }
 
+const socialSetsGetInputSchema = Schema.Struct({
+  social_set_id: TypefullyIdentifierSchema,
+})
+
 const socialSetsListCommand = Command.make(
   "list",
   {
@@ -72,7 +81,23 @@ const socialSetsListCommand = Command.make(
   },
 ).pipe(Command.withDescription("List Typefully social sets"))
 
+const socialSetsGetCommand = Command.make("get", { input: jsonInputArg }, ({ input }) =>
+  executeJsonCommand(
+    "social-sets get",
+    Effect.gen(function* () {
+      const payload = yield* loadJsonInput(socialSetsGetInputSchema, input)
+      const socialSet = yield* getSocialSet({ socialSetId: payload.social_set_id })
+
+      return {
+        social_set: socialSet,
+      }
+    }),
+  ),
+).pipe(
+  Command.withDescription("Get a single social set from a JSON input object containing social_set_id"),
+)
+
 export const socialSetsCommand = Command.make("social-sets").pipe(
   Command.withDescription("Social set commands"),
-  Command.withSubcommands([socialSetsListCommand]),
+  Command.withSubcommands([socialSetsListCommand, socialSetsGetCommand]),
 )

@@ -179,4 +179,153 @@ describe("typefully CLI foundation", () => {
     expect(payload.data.social_sets.results[0]?.username).toBe("typefully")
     expect(requests).toEqual(["GET /v2/social-sets?limit=1&offset=2"])
   })
+
+  test("social-sets get fetches a single social set detail", async () => {
+    const requests: string[] = []
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url)
+        requests.push(`${request.method} ${url.pathname}`)
+
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            username: "typefully",
+            name: "Typefully",
+            profile_image_url: "https://example.com/avatar.png",
+            team: {
+              id: "team_1",
+              name: "Typefully Team",
+            },
+            platforms: {
+              x: {
+                username: "typefully",
+                name: "Typefully",
+                profile_url: "https://x.com/typefully",
+                profile_image_url: "https://example.com/x-avatar.png",
+              },
+              linkedin: {
+                username: "typefullycom",
+                name: "Typefully",
+                profile_url: "https://www.linkedin.com/company/typefullycom/",
+                profile_image_url: "https://example.com/linkedin-avatar.png",
+              },
+            },
+            publishing_quota: {
+              used: 12,
+              remaining: "unlimited",
+              resets_at: null,
+            },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+          },
+        )
+      },
+    })
+    servers.push(server)
+
+    const result = await runCli(["social-sets", "get", '{"social_set_id":12345}'], {
+      TYPEFULLY_API_KEY: "test-token",
+      TYPEFULLY_API_BASE_URL: `http://127.0.0.1:${server.port}/v2`,
+    })
+
+    const payload = expectJson<{
+      ok: boolean
+      command: string
+      data: {
+        social_set: {
+          id: number
+          username?: string
+          name?: string
+          profile_image_url?: string | null
+          team?: {
+            id: string
+            name: string
+          } | null
+          platforms?: {
+            x?: {
+              username: string
+              name?: string | null
+              profile_url?: string | null
+              profile_image_url?: string | null
+            } | null
+            linkedin?: {
+              username: string
+              name?: string | null
+              profile_url?: string | null
+              profile_image_url?: string | null
+            } | null
+          } | null
+          publishing_quota?: {
+            used: number
+            remaining: number | "unlimited"
+            resets_at?: string | null
+          } | null
+        }
+      }
+    }>(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr.trim()).toBe("")
+    expect(payload.command).toBe("social-sets get")
+    expect(payload.data.social_set).toEqual({
+      id: 12345,
+      username: "typefully",
+      name: "Typefully",
+      profile_image_url: "https://example.com/avatar.png",
+      team: {
+        id: "team_1",
+        name: "Typefully Team",
+      },
+      platforms: {
+        x: {
+          username: "typefully",
+          name: "Typefully",
+          profile_url: "https://x.com/typefully",
+          profile_image_url: "https://example.com/x-avatar.png",
+        },
+        linkedin: {
+          username: "typefullycom",
+          name: "Typefully",
+          profile_url: "https://www.linkedin.com/company/typefullycom/",
+          profile_image_url: "https://example.com/linkedin-avatar.png",
+        },
+      },
+      publishing_quota: {
+        used: 12,
+        remaining: "unlimited",
+        resets_at: null,
+      },
+    })
+    expect(requests).toEqual(["GET /v2/social-sets/12345/"])
+  })
+
+  test("social-sets get returns a structured error for invalid JSON input", async () => {
+    const result = await runCli(["social-sets", "get", '{"social_set_id":null}'], {
+      TYPEFULLY_API_KEY: "test-token",
+      TYPEFULLY_API_BASE_URL: "http://127.0.0.1:65535/v2",
+    })
+
+    const payload = expectJson<{
+      ok: boolean
+      command: string
+      error: {
+        type: string
+        message: string
+        details?: {
+          source?: string
+          reason?: string
+        }
+      }
+    }>(result.stderr)
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stdout.trim()).toBe("")
+    expect(payload.ok).toBe(false)
+    expect(payload.command).toBe("social-sets get")
+    expect(payload.error.type).toBe("JsonInputError")
+    expect(payload.error.details?.source).toBe("inline")
+  })
 })

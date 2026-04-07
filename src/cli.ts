@@ -5,11 +5,15 @@ import { Command } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
 
+import { analyticsCommand } from "./commands/analytics"
 import { authCommand } from "./commands/auth"
 import { draftsCommand } from "./commands/drafts"
+import { linkedinCommand } from "./commands/linkedin"
 import { mediaCommand } from "./commands/media"
 import { meCommand } from "./commands/me"
+import { queueCommand } from "./commands/queue"
 import { socialSetsCommand } from "./commands/social-sets"
+import { tagsCommand } from "./commands/tags"
 import { CLI_NAME, CLI_VERSION } from "./core/constants"
 import { writeCauseEnvelope, writeFailureEnvelope, setExitCode } from "./core/output"
 import { AppLayer as TypefullyLayer } from "./core/typefully"
@@ -20,7 +24,11 @@ export const rootCommand = Command.make(CLI_NAME).pipe(
     authCommand,
     meCommand,
     socialSetsCommand,
+    tagsCommand,
     draftsCommand,
+    queueCommand,
+    analyticsCommand,
+    linkedinCommand,
     mediaCommand,
   ]),
 )

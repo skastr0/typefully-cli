@@ -31,6 +31,21 @@ const SocialSetSummarySchema = Schema.Struct({
   team: Schema.optional(Schema.NullOr(TypefullyTeamSchema)),
 })
 
+const SocialSetPlatformAccountBaseSchema = Schema.Struct({
+  username: Schema.String,
+  name: Schema.optional(Schema.NullOr(Schema.String)),
+  profile_url: Schema.optional(Schema.NullOr(Schema.String)),
+  profile_image_url: Schema.optional(Schema.NullOr(Schema.String)),
+})
+
+const SocialSetPlatformsSchema = Schema.Struct({
+  x: Schema.optional(Schema.NullOr(SocialSetPlatformAccountBaseSchema)),
+  linkedin: Schema.optional(Schema.NullOr(SocialSetPlatformAccountBaseSchema)),
+  mastodon: Schema.optional(Schema.NullOr(SocialSetPlatformAccountBaseSchema)),
+  threads: Schema.optional(Schema.NullOr(SocialSetPlatformAccountBaseSchema)),
+  bluesky: Schema.optional(Schema.NullOr(SocialSetPlatformAccountBaseSchema)),
+})
+
 export const SocialSetListResponseSchema = Schema.Struct({
   results: Schema.Array(SocialSetSummarySchema),
   count: Schema.Number,
@@ -41,6 +56,51 @@ export const SocialSetListResponseSchema = Schema.Struct({
 })
 
 export type SocialSetListResponse = typeof SocialSetListResponseSchema.Type
+
+export const SocialSetDetailResponseSchema = Schema.Struct({
+  id: TypefullyIdentifierSchema,
+  username: Schema.optional(Schema.String),
+  name: Schema.optional(Schema.String),
+  profile_image_url: Schema.optional(Schema.NullOr(Schema.String)),
+  team: Schema.optional(Schema.NullOr(TypefullyTeamSchema)),
+  platforms: Schema.optional(Schema.NullOr(SocialSetPlatformsSchema)),
+  publishing_quota: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        used: Schema.Number,
+        remaining: Schema.Union(Schema.Number, Schema.Literal("unlimited")),
+        resets_at: Schema.optional(Schema.NullOr(Schema.String)),
+      }),
+    ),
+  ),
+})
+
+export type SocialSetDetailResponse = typeof SocialSetDetailResponseSchema.Type
+
+export const TagSchema = Schema.Struct({
+  slug: Schema.String,
+  name: Schema.String,
+  created_at: Schema.String,
+})
+
+export type Tag = typeof TagSchema.Type
+
+export const TagListResponseSchema = Schema.Struct({
+  results: Schema.Array(TagSchema),
+  count: Schema.Number,
+  limit: Schema.Number,
+  offset: Schema.Number,
+  next: Schema.NullOr(Schema.String),
+  previous: Schema.NullOr(Schema.String),
+})
+
+export type TagListResponse = typeof TagListResponseSchema.Type
+
+export const TagCreateRequestSchema = Schema.Struct({
+  name: Schema.String,
+})
+
+export type TagCreateRequest = typeof TagCreateRequestSchema.Type
 
 export const TypefullyMeSchema = Schema.Struct({
   id: TypefullyIdentifierSchema,
@@ -223,6 +283,113 @@ export const DraftDetailResponseSchema = Schema.Struct({
 
 export type DraftDetailResponse = typeof DraftDetailResponseSchema.Type
 
+export const QueueScheduleDaySchema = Schema.Literal(
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+  "sat",
+  "sun",
+)
+
+export type QueueScheduleDay = typeof QueueScheduleDaySchema.Type
+
+export const QueueScheduleRuleSchema = Schema.Struct({
+  h: Schema.Number,
+  m: Schema.Number,
+  days: Schema.Array(QueueScheduleDaySchema),
+})
+
+export type QueueScheduleRule = typeof QueueScheduleRuleSchema.Type
+
+export const QueueScheduleResponseSchema = Schema.Struct({
+  social_set_id: TypefullyIdentifierSchema,
+  timezone: Schema.String,
+  rules: Schema.Array(QueueScheduleRuleSchema),
+})
+
+export type QueueScheduleResponse = typeof QueueScheduleResponseSchema.Type
+
+export const QueueScheduleUpdateRequestSchema = Schema.Struct({
+  rules: Schema.Array(QueueScheduleRuleSchema),
+})
+
+export type QueueScheduleUpdateRequest = typeof QueueScheduleUpdateRequestSchema.Type
+
+const QueueItemSchema = Schema.Struct({
+  at: Schema.String,
+  kind: Schema.Literal("queue_slot", "custom_time"),
+  draft: Schema.optional(Schema.NullOr(DraftListItemSchema)),
+})
+
+const QueueDaySchema = Schema.Struct({
+  date: Schema.String,
+  items: Schema.Array(QueueItemSchema),
+})
+
+export const QueueResponseSchema = Schema.Struct({
+  social_set_id: TypefullyIdentifierSchema,
+  start_date: Schema.String,
+  end_date: Schema.String,
+  days: Schema.Array(QueueDaySchema),
+})
+
+export type QueueResponse = typeof QueueResponseSchema.Type
+
+// Analytics schemas
+export const AnalyticsPlatformSchema = Schema.Literal("x")
+
+export type AnalyticsPlatform = typeof AnalyticsPlatformSchema.Type
+
+export const AnalyticsPostSchema = Schema.Struct({
+  platform: AnalyticsPlatformSchema,
+  post_id: Schema.String,
+  created_at: Schema.String,
+  preview_text: Schema.String,
+  url: Schema.String,
+  metrics: Schema.Struct({
+    impressions: Schema.Number,
+    engagement: Schema.Struct({
+      total: Schema.Number,
+      likes: Schema.Number,
+      comments: Schema.Number,
+      shares: Schema.Number,
+      quotes: Schema.Number,
+      profile_clicks: Schema.Number,
+      saves: Schema.optional(Schema.NullOr(Schema.Number)),
+      link_clicks: Schema.optional(Schema.NullOr(Schema.Number)),
+    }),
+  }),
+  draft_id: Schema.optional(Schema.NullOr(Schema.Number)),
+})
+
+export type AnalyticsPost = typeof AnalyticsPostSchema.Type
+
+export const AnalyticsPostsResponseSchema = Schema.Struct({
+  results: Schema.Array(AnalyticsPostSchema),
+  limit: Schema.Number,
+  offset: Schema.Number,
+  next: Schema.NullOr(Schema.String),
+  previous: Schema.NullOr(Schema.String),
+})
+
+export type AnalyticsPostsResponse = typeof AnalyticsPostsResponseSchema.Type
+
+export const LinkedInOrganizationResponseSchema = Schema.Struct({
+  id: Schema.String,
+  urn: Schema.String,
+  mention_text: Schema.String,
+  name: Schema.optional(Schema.NullOr(Schema.String)),
+  vanity_name: Schema.optional(Schema.NullOr(Schema.String)),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+  website: Schema.optional(Schema.NullOr(Schema.String)),
+  logo_url: Schema.optional(Schema.NullOr(Schema.String)),
+  url: Schema.optional(Schema.NullOr(Schema.String)),
+})
+
+export type LinkedInOrganizationResponse = typeof LinkedInOrganizationResponseSchema.Type
+
 export const CreateMediaUploadRequestSchema = Schema.Struct({
   file_name: Schema.String,
 })
@@ -264,7 +431,7 @@ export interface TypefullyAuthStatus {
 
 const authStatus = (value: TypefullyAuthStatus): TypefullyAuthStatus => value
 
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE"
+type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
 
 interface RequestSpec<A, I, R> {
   readonly method: HttpMethod
@@ -327,6 +494,10 @@ const buildRequest = (spec: RawRequestSpec) => {
     }
     case "PATCH": {
       const request = HttpClientRequest.patch(spec.path, { urlParams: query })
+      return spec.body === undefined ? request : request.pipe(HttpClientRequest.bodyUnsafeJson(spec.body))
+    }
+    case "PUT": {
+      const request = HttpClientRequest.put(spec.path, { urlParams: query })
       return spec.body === undefined ? request : request.pipe(HttpClientRequest.bodyUnsafeJson(spec.body))
     }
     case "DELETE": {
@@ -504,6 +675,41 @@ export const listSocialSets = (params?: { readonly limit?: number; readonly offs
 
 const toPathId = (value: TypefullyIdentifier) => String(value)
 
+export const getSocialSet = (params: {
+  readonly socialSetId: TypefullyIdentifier
+}) =>
+  requestTypefullyJson({
+    method: "GET",
+    path: `/social-sets/${toPathId(params.socialSetId)}/`,
+    responseSchema: SocialSetDetailResponseSchema,
+  })
+
+export const listTags = (params: {
+  readonly socialSetId: TypefullyIdentifier
+  readonly limit?: number
+  readonly offset?: number
+}) =>
+  requestTypefullyJson({
+    method: "GET",
+    path: `/social-sets/${toPathId(params.socialSetId)}/tags`,
+    query: {
+      limit: params.limit !== undefined ? String(params.limit) : undefined,
+      offset: params.offset !== undefined ? String(params.offset) : undefined,
+    },
+    responseSchema: TagListResponseSchema,
+  })
+
+export const createTag = (params: {
+  readonly socialSetId: TypefullyIdentifier
+  readonly body: TagCreateRequest
+}) =>
+  requestTypefullyJson({
+    method: "POST",
+    path: `/social-sets/${toPathId(params.socialSetId)}/tags`,
+    body: params.body,
+    responseSchema: TagSchema,
+  })
+
 export const listDrafts = (params: {
   readonly socialSetId: TypefullyIdentifier
   readonly limit?: number
@@ -565,6 +771,77 @@ export const deleteDraft = (params: {
   requestTypefullyNoContent({
     method: "DELETE",
     path: `/social-sets/${toPathId(params.socialSetId)}/drafts/${toPathId(params.draftId)}`,
+  })
+
+export const getQueue = (params: {
+  readonly socialSetId: TypefullyIdentifier
+  readonly startDate: string
+  readonly endDate: string
+}) =>
+  requestTypefullyJson({
+    method: "GET",
+    path: `/social-sets/${toPathId(params.socialSetId)}/queue`,
+    query: {
+      start_date: params.startDate,
+      end_date: params.endDate,
+    },
+    responseSchema: QueueResponseSchema,
+  })
+
+export const getQueueSchedule = (params: {
+  readonly socialSetId: TypefullyIdentifier
+}) =>
+  requestTypefullyJson({
+    method: "GET",
+    path: `/social-sets/${toPathId(params.socialSetId)}/queue/schedule`,
+    responseSchema: QueueScheduleResponseSchema,
+  })
+
+export const updateQueueSchedule = (params: {
+  readonly socialSetId: TypefullyIdentifier
+  readonly body: QueueScheduleUpdateRequest
+}) =>
+  requestTypefullyJson({
+    method: "PUT",
+    path: `/social-sets/${toPathId(params.socialSetId)}/queue/schedule`,
+    body: params.body,
+    responseSchema: QueueScheduleResponseSchema,
+  })
+
+export const getAnalyticsPosts = (params: {
+  readonly socialSetId: TypefullyIdentifier
+  readonly platform: AnalyticsPlatform
+  readonly startDate: string
+  readonly endDate: string
+  readonly includeReplies?: boolean
+  readonly limit?: number
+  readonly offset?: number
+}) =>
+  requestTypefullyJson({
+    method: "GET",
+    path: `/social-sets/${toPathId(params.socialSetId)}/analytics/${params.platform}/posts`,
+    query: {
+      start_date: params.startDate,
+      end_date: params.endDate,
+      include_replies:
+        params.includeReplies !== undefined ? String(params.includeReplies) : undefined,
+      limit: params.limit !== undefined ? String(params.limit) : undefined,
+      offset: params.offset !== undefined ? String(params.offset) : undefined,
+    },
+    responseSchema: AnalyticsPostsResponseSchema,
+  })
+
+export const resolveLinkedInOrganization = (params: {
+  readonly socialSetId: TypefullyIdentifier
+  readonly organizationUrl: string
+}) =>
+  requestTypefullyJson({
+    method: "GET",
+    path: `/social-sets/${toPathId(params.socialSetId)}/linkedin/organizations/resolve`,
+    query: {
+      organization_url: params.organizationUrl,
+    },
+    responseSchema: LinkedInOrganizationResponseSchema,
   })
 
 export const createMediaUpload = (params: {
