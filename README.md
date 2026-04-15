@@ -1,6 +1,29 @@
 # typefully-cli
 
-JSON-first Bun + Effect CLI for the Typefully v2 API.
+JSON-first Bun + Effect CLI for the [Typefully v2 API](https://support.typefully.com/en/articles/8764053-the-typefully-api).
+
+## Requirements
+
+- [Bun](https://bun.sh) >= 1.3
+
+## Install
+
+```bash
+# clone and build
+git clone https://github.com/skastr0/typefully-cli.git
+cd typefully-cli
+bun install
+bun run build
+
+# install the binary to ~/.local/bin
+bun run install:local
+```
+
+Or run directly without installing:
+
+```bash
+bun run dev <command>
+```
 
 ## Environment
 
@@ -43,42 +66,165 @@ export TYPEFULLY_API_BASE_URL="https://api.typefully.com/v2"
 - PATCH payloads use **omit to leave unchanged** semantics. Prefer omission over `null`.
 - `media upload` waits for `ready` by default. Set `wait_for_ready: false` to return right after the presigned PUT upload.
 
-## Examples
+## Commands
+
+### `auth status`
+
+Check whether the configured API key works against Typefully v2.
 
 ```bash
-# health / auth
-bun run dev auth status
-bun run dev me
-
-# simple read flow
-bun run dev social-sets list --limit 10 --offset 0
-
-# single draft from a JSON file
-bun run dev drafts create @examples/drafts/create-single.json
-
-# batch draft creation with explicit concurrency control
-bun run dev drafts create @examples/drafts/create-batch.json --concurrency 2
-
-# batch draft update
-bun run dev drafts update @examples/drafts/update-batch.json --concurrency 2
-
-# post analytics for X in a date range
-bun run dev analytics posts @examples/analytics/posts.json
-
-# resolve a LinkedIn company URL into mention-ready metadata
-bun run dev linkedin organizations resolve @examples/linkedin/organizations-resolve.json
-
-# media upload with polling until ready
-bun run dev media upload @examples/media/upload.json
-
-# media upload that returns immediately after the raw PUT upload
-bun run dev media upload '{"social_set_id":123,"file_path":"./image.png","wait_for_ready":false}'
-
-# draft creation using the media_id returned by `media upload`
-bun run dev drafts create @examples/drafts/create-with-media.json
+typefully auth status
 ```
 
-Example draft payload with an uploaded attachment:
+### `me`
+
+Fetch the current Typefully account via `/v2/me`.
+
+```bash
+typefully me
+```
+
+### `social-sets list`
+
+List social sets. Uses `--limit` and `--offset` options (not JSON input).
+
+```bash
+typefully social-sets list --limit 10 --offset 0
+```
+
+### `social-sets get`
+
+Get a single social set by ID.
+
+```bash
+typefully social-sets get @examples/social-sets/get.json
+```
+
+### `tags list`
+
+List tags for a social set.
+
+```bash
+typefully tags list @examples/tags/list.json
+```
+
+### `tags create`
+
+Create a tag for a social set.
+
+```bash
+typefully tags create @examples/tags/create.json
+```
+
+### `drafts list`
+
+List drafts from a JSON input object containing `social_set_id` and optional filters (`status`, `tag`, `order_by`, `limit`, `offset`).
+
+```bash
+typefully drafts list @examples/drafts/list.json
+```
+
+### `drafts get`
+
+Get a single draft by `social_set_id` and `draft_id`.
+
+```bash
+typefully drafts get @examples/drafts/get.json
+```
+
+### `drafts create`
+
+Create one or more drafts. Accepts a single object or an array.
+
+```bash
+# single draft from a JSON file
+typefully drafts create @examples/drafts/create-single.json
+
+# batch creation with explicit concurrency control
+typefully drafts create @examples/drafts/create-batch.json --concurrency 2
+```
+
+### `drafts update`
+
+Update one or more drafts. Accepts a single object or an array.
+
+```bash
+typefully drafts update @examples/drafts/update-batch.json --concurrency 2
+```
+
+### `drafts delete`
+
+Delete one or more drafts. Accepts a single object or an array.
+
+```bash
+typefully drafts delete @examples/drafts/delete-batch.json --concurrency 2
+```
+
+### `queue get`
+
+Get queue slots and scheduled drafts for a date range.
+
+```bash
+typefully queue get @examples/queue/get.json
+```
+
+### `queue schedule get`
+
+Get queue schedule rules for a social set.
+
+```bash
+typefully queue schedule get @examples/queue/schedule-get.json
+```
+
+### `queue schedule update`
+
+Replace queue schedule rules for a social set.
+
+```bash
+typefully queue schedule update @examples/queue/schedule-update.json
+```
+
+### `analytics posts`
+
+Get analytics posts for a social set, platform, and date range.
+
+```bash
+typefully analytics posts @examples/analytics/posts.json
+```
+
+### `linkedin organizations resolve`
+
+Resolve a LinkedIn company URL into mention-ready metadata.
+
+```bash
+typefully linkedin organizations resolve @examples/linkedin/organizations-resolve.json
+```
+
+Returns a `mention_text` field you can paste directly into LinkedIn draft text:
+
+```json
+{
+  "id": "987654",
+  "urn": "urn:li:organization:987654",
+  "mention_text": "@[Typefully](urn:li:organization:987654)",
+  "name": "Typefully",
+  "url": "https://www.linkedin.com/company/typefullycom/"
+}
+```
+
+### `media upload`
+
+Upload a local file. Waits for `ready` by default.
+
+```bash
+# upload and wait for processing to complete
+typefully media upload @examples/media/upload.json
+
+# return immediately after the raw PUT upload
+typefully media upload '{"social_set_id":123,"file_path":"./image.png","wait_for_ready":false}'
+```
+
+Use the returned `media_id` in draft creation:
 
 ```json
 {
@@ -97,39 +243,13 @@ Example draft payload with an uploaded attachment:
 }
 ```
 
-`linkedin organizations resolve` returns a `mention_text` field. Paste that value directly into your LinkedIn draft text:
-
-```json
-{
-  "id": "987654",
-  "urn": "urn:li:organization:987654",
-  "mention_text": "@[Typefully](urn:li:organization:987654)",
-  "name": "Typefully",
-  "url": "https://www.linkedin.com/company/typefullycom/"
-}
-```
-
-Then use that `mention_text` value as-is in your draft payload:
-
-```json
-{
-  "social_set_id": 123,
-  "platforms": {
-    "linkedin": {
-      "enabled": true,
-      "posts": [
-        {
-          "text": "Thanks @[Typefully](urn:li:organization:987654) for the support."
-        }
-      ]
-    }
-  }
-}
-```
-
 ## Agent workflow notes
 
 - Prefer `@file` JSON inputs so prompts stay small and reproducible.
 - Use array payloads for batch draft mutations when an agent can tolerate partial success.
 - On batch failures, the CLI still returns a success envelope on `stdout` with per-item results and sets exit code `1` when any item fails.
 - Media uploads follow the documented Typefully v2 flow: request a presigned URL, upload raw file bytes with a plain `PUT`, then poll `/media/{media_id}` until `ready`, `failed`, or timeout.
+
+## License
+
+[MIT](LICENSE)
