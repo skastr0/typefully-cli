@@ -10,7 +10,7 @@ const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
 )
 
-const linkedinOrganizationResolveInputSchema = Schema.Struct({
+export const linkedinOrganizationResolveInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   organization_url: Schema.String,
 })

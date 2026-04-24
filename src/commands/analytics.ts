@@ -1,6 +1,7 @@
-import { Args, Command } from "@effect/cli"
+import { Args, Command, Options } from "@effect/cli"
 import { Effect, Schema } from "effect"
 
+import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
 import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
@@ -16,7 +17,12 @@ const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
 )
 
-const analyticsPostsInputSchema = Schema.Struct({
+const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
+  Options.withDefault("inline"),
+  Options.withDescription("Output policy for potentially large responses: inline, artifact, or auto"),
+)
+
+export const analyticsPostsInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   platform: AnalyticsPlatformSchema,
   start_date: Schema.String,
@@ -111,7 +117,10 @@ const validateAnalyticsPostsInput = (input: AnalyticsPostsInput) =>
     }
   })
 
-const analyticsPostsCommand = Command.make("posts", { input: jsonInputArg }, ({ input }) =>
+const analyticsPostsCommand = Command.make(
+  "posts",
+  { input: jsonInputArg, output: outputOption },
+  ({ input, output }) =>
   executeJsonCommand(
     "analytics posts",
     Effect.gen(function* () {
@@ -130,7 +139,14 @@ const analyticsPostsCommand = Command.make("posts", { input: jsonInputArg }, ({ 
         ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
       })
 
-      return { posts }
+      return yield* applyOutputPolicy({
+        outputMode: output,
+        command: "analytics posts",
+        data: { posts },
+        artifactKey: "analytics.posts",
+        artifactLabel: "analytics posts response",
+        summary: `Wrote ${posts.results.length} records from analytics posts to an artifact.`,
+      })
     }),
   ),
 ).pipe(

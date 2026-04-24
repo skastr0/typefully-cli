@@ -219,12 +219,13 @@ describe("typefully drafts commands", () => {
       ok: boolean
       command: string
       data: {
+        outcome: string
         total: number
         success_count: number
         error_count: number
         results: Array<{
           ok: boolean
-          social_set_id: number
+          target: { social_set_id: number }
           data: {
             draft_title: string
             tags: string[]
@@ -236,12 +237,13 @@ describe("typefully drafts commands", () => {
     expect(result.exitCode).toBe(0)
     expect(result.stderr.trim()).toBe("")
     expect(payload.command).toBe("drafts create")
+    expect(payload.data.outcome).toBe("succeeded")
     expect(payload.data.total).toBe(1)
     expect(payload.data.success_count).toBe(1)
     expect(payload.data.error_count).toBe(0)
     expect(payload.data.results[0]).toMatchObject({
       ok: true,
-      social_set_id: 123,
+      target: { social_set_id: 123 },
       data: {
         draft_title: "CLI example",
         tags: ["cli", "example"],
@@ -307,6 +309,7 @@ describe("typefully drafts commands", () => {
       ok: boolean
       command: string
       data: {
+        outcome: string
         total: number
         success_count: number
         error_count: number
@@ -314,15 +317,16 @@ describe("typefully drafts commands", () => {
         results: Array<
           | {
               ok: true
-              social_set_id: number
-              draft_id: number
+              target: { social_set_id: number; draft_id: number }
               data: { draft_title: string }
             }
           | {
               ok: false
-              social_set_id: number
-              draft_id: number
-              error: { type: string; details: { status: number } }
+              target: { social_set_id: number; draft_id: number }
+              error: {
+                type: string
+                details: { status: number; target: { index: number; social_set_id: number; draft_id: number } }
+              }
             }
         >
       }
@@ -331,23 +335,22 @@ describe("typefully drafts commands", () => {
     expect(result.exitCode).toBe(1)
     expect(result.stderr.trim()).toBe("")
     expect(payload.command).toBe("drafts update")
+    expect(payload.data.outcome).toBe("partial_failure")
     expect(payload.data.total).toBe(2)
     expect(payload.data.success_count).toBe(1)
     expect(payload.data.error_count).toBe(1)
     expect(payload.data.concurrency).toBe(2)
     expect(payload.data.results[0]).toMatchObject({
       ok: true,
-      social_set_id: 123,
-      draft_id: 987,
+      target: { social_set_id: 123, draft_id: 987 },
       data: { draft_title: "Batch updated draft" },
     })
     expect(payload.data.results[1]).toMatchObject({
       ok: false,
-      social_set_id: 123,
-      draft_id: 654,
+      target: { social_set_id: 123, draft_id: 654 },
       error: {
         type: "TypefullyApiError",
-        details: { status: 422 },
+        details: { status: 422, target: { index: 1, social_set_id: 123, draft_id: 654 } },
       },
     })
     expect(requests).toEqual([
@@ -376,14 +379,14 @@ describe("typefully drafts commands", () => {
       ok: boolean
       command: string
       data: {
+        outcome: string
         total: number
         success_count: number
         error_count: number
         results: Array<{
           index: number
           ok: boolean
-          social_set_id: number
-          draft_id: number
+          target: { social_set_id: number; draft_id: number }
           data: { deleted: boolean }
         }>
       }
@@ -392,6 +395,7 @@ describe("typefully drafts commands", () => {
     expect(result.exitCode).toBe(0)
     expect(result.stderr.trim()).toBe("")
     expect(payload.command).toBe("drafts delete")
+    expect(payload.data.outcome).toBe("succeeded")
     expect(payload.data.total).toBe(2)
     expect(payload.data.success_count).toBe(2)
     expect(payload.data.error_count).toBe(0)
@@ -399,15 +403,13 @@ describe("typefully drafts commands", () => {
       {
         index: 0,
         ok: true,
-        social_set_id: 123,
-        draft_id: 987,
+        target: { social_set_id: 123, draft_id: 987 },
         data: { deleted: true },
       },
       {
         index: 1,
         ok: true,
-        social_set_id: 123,
-        draft_id: 654,
+        target: { social_set_id: 123, draft_id: 654 },
         data: { deleted: true },
       },
     ])

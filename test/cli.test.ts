@@ -11,6 +11,20 @@ afterEach(() => {
 })
 
 describe("typefully CLI foundation", () => {
+  test("root help advertises discovery and JSON-domain commands", async () => {
+    const result = await runCli(["--help"], {
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: undefined,
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr.trim()).toBe("")
+    expect(result.stdout).toContain("doctor")
+    expect(result.stdout).toContain("capabilities")
+    expect(result.stdout).toContain("schema show")
+    expect(result.stdout).toContain("social-sets list")
+  })
+
   test("auth status reports missing API key without failing", async () => {
     const result = await runCli(["auth", "status"], {
       TYPEFULLY_API_KEY: undefined,
@@ -153,7 +167,7 @@ describe("typefully CLI foundation", () => {
     })
     servers.push(server)
 
-    const result = await runCli(["social-sets", "list", "--limit", "1", "--offset", "2"], {
+    const result = await runCli(["social-sets", "list", '{"limit":1,"offset":2}'], {
       TYPEFULLY_API_KEY: "test-token",
       TYPEFULLY_API_BASE_URL: `http://127.0.0.1:${server.port}/v2`,
     })

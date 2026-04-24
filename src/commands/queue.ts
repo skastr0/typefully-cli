@@ -1,6 +1,7 @@
-import { Args, Command } from "@effect/cli"
+import { Args, Command, Options } from "@effect/cli"
 import { Effect, Schema } from "effect"
 
+import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
 import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
@@ -19,7 +20,12 @@ const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
 )
 
-const queueGetInputSchema = Schema.Struct({
+const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
+  Options.withDefault("inline"),
+  Options.withDescription("Output policy for potentially large responses: inline, artifact, or auto"),
+)
+
+export const queueGetInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   start_date: Schema.String,
   end_date: Schema.String,
@@ -27,7 +33,7 @@ const queueGetInputSchema = Schema.Struct({
 
 type QueueGetInput = typeof queueGetInputSchema.Type
 
-const queueScheduleGetInputSchema = Schema.Struct({
+export const queueScheduleGetInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
 })
 
@@ -39,7 +45,7 @@ const queueScheduleRuleInputSchema = Schema.Struct({
 
 type QueueScheduleRuleInput = typeof queueScheduleRuleInputSchema.Type
 
-const queueScheduleUpdateInputSchema = Schema.Struct({
+export const queueScheduleUpdateInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   rules: Schema.Array(queueScheduleRuleInputSchema),
 })
@@ -138,7 +144,7 @@ const buildQueueScheduleUpdateBody = (input: QueueScheduleUpdateInput): QueueSch
   })),
 })
 
-const queueGetCommand = Command.make("get", { input: jsonInputArg }, ({ input }) =>
+const queueGetCommand = Command.make("get", { input: jsonInputArg, output: outputOption }, ({ input, output }) =>
   executeJsonCommand(
     "queue get",
     Effect.gen(function* () {
@@ -151,7 +157,16 @@ const queueGetCommand = Command.make("get", { input: jsonInputArg }, ({ input })
         endDate: payload.end_date,
       })
 
-      return { queue }
+      const itemCount = queue.days.reduce((total, day) => total + day.items.length, 0)
+
+      return yield* applyOutputPolicy({
+        outputMode: output,
+        command: "queue get",
+        data: { queue },
+        artifactKey: "queue.get",
+        artifactLabel: "queue get response",
+        summary: `Wrote ${itemCount} queue items from queue get to an artifact.`,
+      })
     }),
   ),
 ).pipe(Command.withDescription("Get queue slots and scheduled drafts for a date range"))

@@ -33,6 +33,14 @@ export class CommandInputError extends Schema.TaggedError<CommandInputError>()(
   },
 ) {}
 
+export class ArtifactWriteError extends Schema.TaggedError<ArtifactWriteError>()(
+  "ArtifactWriteError",
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
 export class MediaFileError extends Schema.TaggedError<MediaFileError>()(
   "MediaFileError",
   {
@@ -96,6 +104,7 @@ export type AppError =
   | MissingApiKeyError
   | JsonInputError
   | CommandInputError
+  | ArtifactWriteError
   | MediaFileError
   | MediaUploadError
   | MediaProcessingError

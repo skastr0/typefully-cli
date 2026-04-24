@@ -1,25 +1,19 @@
 import { Args, Command, Options } from "@effect/cli"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Schema } from "effect"
 
+import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
 import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
 import { getSocialSet, listSocialSets, TypefullyIdentifierSchema } from "../core/typefully"
 
-const toUndefined = <A>(value: Option.Option<A>) => (Option.isSome(value) ? value.value : undefined)
-
 const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
 )
 
-const limitOption = Options.integer("limit").pipe(
-  Options.optional,
-  Options.withDescription("Maximum number of social sets to return"),
-)
-
-const offsetOption = Options.integer("offset").pipe(
-  Options.optional,
-  Options.withDescription("Number of social sets to skip before returning results"),
+const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
+  Options.withDefault("inline"),
+  Options.withDescription("Output policy for potentially large responses: inline, artifact, or auto"),
 )
 
 const validatePagination = (field: "limit" | "offset", value: number | undefined) => {
@@ -48,38 +42,51 @@ const validatePagination = (field: "limit" | "offset", value: number | undefined
   return Effect.void
 }
 
-const socialSetsGetInputSchema = Schema.Struct({
+export const socialSetsListInputSchema = Schema.Struct({
+  limit: Schema.optional(Schema.Number),
+  offset: Schema.optional(Schema.Number),
+})
+
+type SocialSetsListInput = typeof socialSetsListInputSchema.Type
+
+export const socialSetsGetInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
 })
 
+const validateListInput = (input: SocialSetsListInput) =>
+  Effect.gen(function* () {
+    yield* validatePagination("limit", input.limit)
+    yield* validatePagination("offset", input.offset)
+  })
+
 const socialSetsListCommand = Command.make(
   "list",
-  {
-    limit: limitOption,
-    offset: offsetOption,
-  },
-  ({ limit, offset }) => {
-    const resolvedLimit = toUndefined(limit)
-    const resolvedOffset = toUndefined(offset)
-
-    return executeJsonCommand(
+  { input: jsonInputArg, output: outputOption },
+  ({ input, output }) =>
+    executeJsonCommand(
       "social-sets list",
       Effect.gen(function* () {
-        yield* validatePagination("limit", resolvedLimit)
-        yield* validatePagination("offset", resolvedOffset)
+        const payload = yield* loadJsonInput(socialSetsListInputSchema, input)
+        yield* validateListInput(payload)
 
         const socialSets = yield* listSocialSets({
-          ...(resolvedLimit !== undefined ? { limit: resolvedLimit } : {}),
-          ...(resolvedOffset !== undefined ? { offset: resolvedOffset } : {}),
+          ...(payload.limit !== undefined ? { limit: payload.limit } : {}),
+          ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
         })
 
-        return {
-          social_sets: socialSets,
-        }
+        return yield* applyOutputPolicy({
+          outputMode: output,
+          command: "social-sets list",
+          data: { social_sets: socialSets },
+          artifactKey: "social-sets.list",
+          artifactLabel: "social-sets list response",
+          summary: `Wrote ${socialSets.results.length} records from social-sets list to an artifact.`,
+        })
       }),
     )
-  },
-).pipe(Command.withDescription("List Typefully social sets"))
+).pipe(
+  Command.withDescription("List Typefully social sets from a JSON input object with optional pagination"),
+)
 
 const socialSetsGetCommand = Command.make("get", { input: jsonInputArg }, ({ input }) =>
   executeJsonCommand(

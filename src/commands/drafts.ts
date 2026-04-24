@@ -1,6 +1,8 @@
 import { Args, Command, Options } from "@effect/cli"
 import { Effect, Option, Schema } from "effect"
 
+import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
+import type { OutputMode } from "../core/artifacts"
 import { CommandInputError, JsonInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand, setExitCode, toErrorDetails } from "../core/output"
@@ -22,7 +24,7 @@ import type {
   TypefullyIdentifier,
 } from "../core/typefully"
 
-const DEFAULT_BATCH_CONCURRENCY = 5
+export const DEFAULT_BATCH_CONCURRENCY = 5
 const publishAtIsoPattern =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
 
@@ -41,7 +43,12 @@ const concurrencyOption = Options.integer("concurrency").pipe(
   ),
 )
 
-const listDraftsInputSchema = Schema.Struct({
+const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
+  Options.withDefault("inline"),
+  Options.withDescription("Output policy for potentially large responses: inline, artifact, or auto"),
+)
+
+export const listDraftsInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   status: Schema.optional(DraftStatusSchema),
   tag: Schema.optional(Schema.String),
@@ -52,12 +59,12 @@ const listDraftsInputSchema = Schema.Struct({
 
 type ListDraftsInput = typeof listDraftsInputSchema.Type
 
-const getDraftInputSchema = Schema.Struct({
+export const getDraftInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   draft_id: TypefullyIdentifierSchema,
 })
 
-const createDraftInputSchema = Schema.Struct({
+export const createDraftInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   platforms: DraftPlatformsSchema,
   draft_title: Schema.optional(Schema.NullOr(Schema.String)),
@@ -69,7 +76,7 @@ const createDraftInputSchema = Schema.Struct({
 
 type CreateDraftInput = typeof createDraftInputSchema.Type
 
-const updateDraftInputSchema = Schema.Struct({
+export const updateDraftInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   draft_id: TypefullyIdentifierSchema,
   platforms: Schema.optional(DraftPlatformsSchema),
@@ -82,30 +89,36 @@ const updateDraftInputSchema = Schema.Struct({
 
 type UpdateDraftInput = typeof updateDraftInputSchema.Type
 
-const deleteDraftInputSchema = Schema.Struct({
+export const deleteDraftInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   draft_id: TypefullyIdentifierSchema,
 })
 
 type DeleteDraftInput = typeof deleteDraftInputSchema.Type
 
+type BatchTarget = {
+  readonly social_set_id?: TypefullyIdentifier
+  readonly draft_id?: TypefullyIdentifier
+}
+
 type BatchMutationResultItem =
   | {
       readonly index: number
       readonly ok: true
-      readonly social_set_id?: TypefullyIdentifier
-      readonly draft_id?: TypefullyIdentifier
+      readonly target?: BatchTarget
       readonly data: unknown
     }
   | {
       readonly index: number
       readonly ok: false
-      readonly social_set_id?: TypefullyIdentifier
-      readonly draft_id?: TypefullyIdentifier
+      readonly target?: BatchTarget
       readonly error: ReturnType<typeof toErrorDetails>
     }
 
+type BatchOutcome = "succeeded" | "partial_failure" | "failed"
+
 interface BatchMutationResult {
+  readonly outcome: BatchOutcome
   readonly total: number
   readonly success_count: number
   readonly error_count: number
@@ -119,24 +132,46 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const maybeIdentifier = (value: unknown): TypefullyIdentifier | undefined =>
   typeof value === "string" || typeof value === "number" ? value : undefined
 
-const extractBatchTargets = (value: unknown) => {
+const extractBatchTarget = (value: unknown): BatchTarget | undefined => {
   if (!isRecord(value)) {
-    return {}
+    return undefined
   }
 
-  return {
-    social_set_id: maybeIdentifier(value.social_set_id),
-    draft_id: maybeIdentifier(value.draft_id),
+  const socialSetId = maybeIdentifier(value.social_set_id)
+  const draftId = maybeIdentifier(value.draft_id)
+  const target = {
+    ...(socialSetId !== undefined ? { social_set_id: socialSetId } : {}),
+    ...(draftId !== undefined ? { draft_id: draftId } : {}),
   }
+
+  return target.social_set_id !== undefined || target.draft_id !== undefined ? target : undefined
 }
 
-const toTargetProps = (targets: {
-  readonly social_set_id?: TypefullyIdentifier | undefined
-  readonly draft_id?: TypefullyIdentifier | undefined
-}) => ({
-  ...(targets.social_set_id !== undefined ? { social_set_id: targets.social_set_id } : {}),
-  ...(targets.draft_id !== undefined ? { draft_id: targets.draft_id } : {}),
-})
+const toTargetProps = (target: BatchTarget | undefined) => (target ? { target } : {})
+
+const withBatchTargetDetails = (
+  error: ReturnType<typeof toErrorDetails>,
+  index: number,
+  target: BatchTarget | undefined,
+) => {
+  const existingDetails = error.details
+  const details = isRecord(existingDetails)
+    ? existingDetails
+    : existingDetails === undefined
+      ? {}
+      : { cause: existingDetails }
+
+  return {
+    ...error,
+    details: {
+      ...details,
+      target: {
+        index,
+        ...(target ?? {}),
+      },
+    },
+  }
+}
 
 const validatePositiveInteger = (field: string, value: number | undefined) => {
   if (value === undefined) {
@@ -338,10 +373,12 @@ const summarizeBatchResults = (
   results: ReadonlyArray<BatchMutationResultItem>,
 ): BatchMutationResult => {
   const error_count = results.filter((result) => !result.ok).length
+  const success_count = results.length - error_count
 
   return {
+    outcome: error_count === 0 ? "succeeded" : success_count === 0 ? "failed" : "partial_failure",
     total: results.length,
-    success_count: results.length - error_count,
+    success_count,
     error_count,
     concurrency,
     results,
@@ -370,14 +407,16 @@ const runMutationBatch = <A, I, R, S>(options: {
           const result = yield* options.run(item)
           return options.toSuccess(item, result, index)
         }).pipe(
-          Effect.catchAll((error) =>
-            Effect.succeed({
+          Effect.catchAll((error) => {
+            const target = extractBatchTarget(rawItem)
+
+            return Effect.succeed({
               index,
               ok: false as const,
-              ...toTargetProps(extractBatchTargets(rawItem)),
-              error: toErrorDetails(error),
-            }),
-          ),
+              ...toTargetProps(target),
+              error: withBatchTargetDetails(toErrorDetails(error), index, target),
+            })
+          }),
         ),
       { concurrency: options.concurrency },
     )
@@ -391,7 +430,20 @@ const runMutationBatch = <A, I, R, S>(options: {
     return summary
   })
 
-const draftsListCommand = Command.make("list", { input: jsonInputArg }, ({ input }) =>
+const withOutput = (outputMode: OutputMode, command: string, data: unknown, itemCount: number) =>
+  applyOutputPolicy({
+    outputMode,
+    command,
+    data,
+    artifactKey: command.replace(/\s+/g, "."),
+    artifactLabel: `${command} response`,
+    summary: `Wrote ${itemCount} records from ${command} to an artifact.`,
+  })
+
+const draftsListCommand = Command.make(
+  "list",
+  { input: jsonInputArg, output: outputOption },
+  ({ input, output }) =>
   executeJsonCommand(
     "drafts list",
     Effect.gen(function* () {
@@ -407,7 +459,7 @@ const draftsListCommand = Command.make("list", { input: jsonInputArg }, ({ input
         ...(payload.order_by !== undefined ? { orderBy: payload.order_by } : {}),
       })
 
-      return { drafts }
+      return yield* withOutput(output, "drafts list", { drafts }, drafts.results.length)
     }),
   ),
 ).pipe(
@@ -455,7 +507,9 @@ const draftsCreateCommand = Command.make(
         toSuccess: (item, draft, index) => ({
           index,
           ok: true,
-          social_set_id: item.social_set_id,
+          target: {
+            social_set_id: item.social_set_id,
+          },
           data: draft,
         }),
       }),
@@ -489,8 +543,10 @@ const draftsUpdateCommand = Command.make(
         toSuccess: (item, draft, index) => ({
           index,
           ok: true,
-          social_set_id: item.social_set_id,
-          draft_id: item.draft_id,
+          target: {
+            social_set_id: item.social_set_id,
+            draft_id: item.draft_id,
+          },
           data: draft,
         }),
       }),
@@ -523,8 +579,10 @@ const draftsDeleteCommand = Command.make(
         toSuccess: (item, result, index) => ({
           index,
           ok: true,
-          social_set_id: item.social_set_id,
-          draft_id: item.draft_id,
+          target: {
+            social_set_id: item.social_set_id,
+            draft_id: item.draft_id,
+          },
           data: result,
         }),
       }),

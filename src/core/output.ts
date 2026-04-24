@@ -2,6 +2,7 @@ import * as Cause from "effect/Cause"
 import { Effect } from "effect"
 
 import {
+  ArtifactWriteError,
   CommandInputError,
   ConfigurationError,
   JsonInputError,
@@ -35,6 +36,38 @@ const writeLine = (stream: NodeJS.WriteStream, text: string) =>
     stream.write(`${text}\n`)
   })
 
+const SENSITIVE_KEY_PATTERN = /(api_?key|authorization|presigned|signature|token|upload_?url)/i
+const SENSITIVE_URL_PATTERN = /https?:\/\/[^\s"']*(?:signature|token|x-amz-signature)[^\s"']*/gi
+const TYPEFULLY_KEY_PATTERN = /tfy_[A-Za-z0-9_-]+/g
+
+const redactSensitiveText = (value: string) =>
+  value
+    .replace(SENSITIVE_URL_PATTERN, "[redacted-url]")
+    .replace(TYPEFULLY_KEY_PATTERN, "[redacted-api-key]")
+
+const redactSensitiveValue = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    return redactSensitiveText(value)
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(redactSensitiveValue)
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        SENSITIVE_KEY_PATTERN.test(key) ? "[redacted]" : redactSensitiveValue(entry),
+      ]),
+    )
+  }
+
+  return value
+}
+
+const isRetryableStatus = (status: number) => status === 408 || status === 409 || status === 429 || status >= 500
+
 export const setExitCode = (exitCode: number) =>
   Effect.sync(() => {
     process.exitCode = exitCode
@@ -44,8 +77,12 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof ConfigurationError) {
     return {
       type: error._tag,
-      message: error.message,
-      details: { field: error.field },
+      message: redactSensitiveText(error.message),
+      details: {
+        field: error.field,
+        hint: "Check the configured value and rerun the command.",
+        retryable: false,
+      },
     }
   }
 
@@ -56,6 +93,8 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
       details: {
         env_var: error.envVar,
         hint: error.hint,
+        next_step: `Set ${error.envVar} and rerun the command.`,
+        retryable: false,
       },
     }
   }
@@ -63,10 +102,12 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof JsonInputError) {
     return {
       type: error._tag,
-      message: error.message,
+      message: redactSensitiveText(error.message),
       details: {
         source: error.source,
         reason: error.reason,
+        hint: "Provide valid JSON via inline input, @file, or stdin.",
+        retryable: false,
       },
     }
   }
@@ -74,17 +115,36 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof CommandInputError) {
     return {
       type: error._tag,
-      message: error.message,
-      details: { field: error.field },
+      message: redactSensitiveText(error.message),
+      details: {
+        field: error.field,
+        path: error.field,
+        hint: "Fix the input payload and rerun the command.",
+        retryable: false,
+      },
+    }
+  }
+
+  if (error instanceof ArtifactWriteError) {
+    return {
+      type: error._tag,
+      message: redactSensitiveText(error.message),
+      details: {
+        path: error.path,
+        hint: "Check that the artifact directory is writable or set TYPEFULLY_ARTIFACT_DIR.",
+        retryable: true,
+      },
     }
   }
 
   if (error instanceof MediaFileError) {
     return {
       type: error._tag,
-      message: error.message,
+      message: redactSensitiveText(error.message),
       details: {
         file_path: error.filePath,
+        hint: "Check that file_path points to a readable, non-empty file.",
+        retryable: false,
       },
     }
   }
@@ -92,10 +152,12 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof MediaUploadError) {
     return {
       type: error._tag,
-      message: error.message,
+      message: redactSensitiveText(error.message),
       details: {
         file_path: error.filePath,
         status: error.status ?? undefined,
+        hint: "Request a fresh upload URL by rerunning the media upload command.",
+        retryable: true,
       },
     }
   }
@@ -103,11 +165,13 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof MediaProcessingError) {
     return {
       type: error._tag,
-      message: error.message,
+      message: redactSensitiveText(error.message),
       details: {
         social_set_id: error.socialSetId,
         media_id: error.mediaId,
-        reason: error.reason,
+        reason: redactSensitiveValue(error.reason),
+        hint: "Inspect the media processing reason, then retry with a supported file if needed.",
+        retryable: false,
       },
     }
   }
@@ -115,24 +179,32 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof TypefullyRequestError) {
     return {
       type: error._tag,
-      message: error.message,
+      message: redactSensitiveText(error.message),
       details: {
         method: error.method,
         path: error.path,
         reason: error.reason,
+        hint: "Retry after checking network access and TYPEFULLY_API_BASE_URL.",
+        retryable: true,
       },
     }
   }
 
   if (error instanceof TypefullyApiError) {
+    const retryable = isRetryableStatus(error.status)
+
     return {
       type: error._tag,
-      message: error.message,
+      message: redactSensitiveText(error.message),
       details: {
         method: error.method,
         path: error.path,
         status: error.status,
-        body: error.body,
+        body: redactSensitiveValue(error.body),
+        hint: retryable
+          ? "Retry with backoff; the provider reported a retryable status."
+          : "Inspect the provider response and fix the request before retrying.",
+        retryable,
       },
     }
   }
@@ -140,10 +212,12 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof TypefullyDecodeError) {
     return {
       type: error._tag,
-      message: error.message,
+      message: redactSensitiveText(error.message),
       details: {
         method: error.method,
         path: error.path,
+        hint: "The provider response shape did not match the client schema.",
+        retryable: false,
       },
     }
   }
@@ -151,13 +225,13 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
   if (error instanceof Error) {
     return {
       type: error.name || "Error",
-      message: error.message,
+      message: redactSensitiveText(error.message),
     }
   }
 
   return {
     type: "Error",
-    message: String(error),
+    message: redactSensitiveText(String(error)),
   }
 }
 

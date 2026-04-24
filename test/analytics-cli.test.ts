@@ -1,8 +1,11 @@
+import { rm } from "node:fs/promises"
+
 import { afterEach, describe, expect, test } from "bun:test"
 
 import { expectJson, runCli } from "./helpers/cli"
 
 const servers: Array<{ stop: () => void }> = []
+const tempDirs: string[] = []
 
 const examplePath = (name: string) => `@examples/analytics/${name}`
 
@@ -37,10 +40,12 @@ const analyticsPostsResponse = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-afterEach(() => {
+afterEach(async () => {
   for (const server of servers.splice(0)) {
     server.stop()
   }
+
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 describe("typefully analytics commands", () => {
@@ -160,6 +165,59 @@ describe("typefully analytics commands", () => {
         details: { field: "end_date" },
       },
     })
+  })
+
+  test("analytics posts supports artifact output mode", async () => {
+    const artifactDir = `/tmp/typefully-cli-artifacts-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    tempDirs.push(artifactDir)
+
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(JSON.stringify(analyticsPostsResponse()), {
+          headers: { "content-type": "application/json" },
+        })
+      },
+    })
+    servers.push(server)
+
+    const result = await runCli(
+      ["analytics", "posts", examplePath("posts.json"), "--output", "artifact"],
+      {
+        TYPEFULLY_API_KEY: "test-token",
+        TYPEFULLY_API_BASE_URL: `http://127.0.0.1:${server.port}/v2`,
+        TYPEFULLY_ARTIFACT_DIR: artifactDir,
+      },
+    )
+
+    const payload = expectJson<{
+      ok: boolean
+      command: string
+      data: {
+        kind: "summary+artifact"
+        artifact: {
+          key: string
+          absolute_path: string
+          relative_path: string
+          size_bytes: number
+        }
+      }
+    }>(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr.trim()).toBe("")
+    expect(payload.command).toBe("analytics posts")
+    expect(payload.data.kind).toBe("summary+artifact")
+    expect(payload.data.artifact.key).toBe("analytics.posts")
+    expect(payload.data.artifact.size_bytes).toBeGreaterThan(0)
+
+    const artifact = expectJson<{
+      posts: {
+        results: Array<{ post_id: string }>
+      }
+    }>(await Bun.file(payload.data.artifact.absolute_path).text())
+
+    expect(artifact.posts.results[0]?.post_id).toBe("post-123")
   })
 
   test("analytics posts surfaces Typefully API errors", async () => {

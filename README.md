@@ -31,12 +31,15 @@ bun run dev <command>
 export TYPEFULLY_API_KEY="tfy_..."
 # optional, defaults to the public v2 API
 export TYPEFULLY_API_BASE_URL="https://api.typefully.com/v2"
+# optional, defaults to .typefully-cli/artifacts under the current directory
+export TYPEFULLY_ARTIFACT_DIR=".typefully-cli/artifacts"
 ```
 
 ## JSON-first contract
 
 - Mutation commands accept one JSON object or an array of objects.
 - Input can be inline JSON, `@path/to/file.json`, or `-` for stdin.
+- Domain filters and query controls belong in JSON payloads. Flags are reserved for execution controls such as `--concurrency` and `--output`.
 - Success is written to `stdout` as:
 
 ```json
@@ -63,10 +66,84 @@ export TYPEFULLY_API_BASE_URL="https://api.typefully.com/v2"
 
 - Presigned upload URLs are treated as secrets and are redacted from surfaced error envelopes.
 - `drafts create`, `drafts update`, and `drafts delete` accept arrays and run them concurrently with `--concurrency <n>` (default `5`).
+- Batch mutation results include `outcome`, counts, `concurrency`, ordered `results`, and per-item `target` identifiers. The process exits with code `1` if any item fails.
 - PATCH payloads use **omit to leave unchanged** semantics. Prefer omission over `null`.
+- Potentially large reads support `--output inline|artifact|auto`. Artifact mode writes JSON under `.typefully-cli/artifacts` by default; set `TYPEFULLY_ARTIFACT_DIR` to override it.
+- Discovery commands expose the machine contract: `capabilities`, `doctor`, `schema list/show`, and `examples list/show`.
+- Typefully v2 does not expose documented idempotency keys. The CLI does not emulate durable mutation idempotency because doing so would overstate retry safety for create/update/delete calls.
 - `media upload` waits for `ready` by default. Set `wait_for_ready: false` to return right after the presigned PUT upload.
 
+Batch result shape:
+
+```json
+{
+  "outcome": "partial_failure",
+  "total": 2,
+  "success_count": 1,
+  "error_count": 1,
+  "concurrency": 2,
+  "results": [
+    {
+      "index": 0,
+      "ok": true,
+      "target": { "social_set_id": 123, "draft_id": 987 },
+      "data": {}
+    },
+    {
+      "index": 1,
+      "ok": false,
+      "target": { "social_set_id": 123, "draft_id": 654 },
+      "error": {
+        "type": "TypefullyApiError",
+        "message": "Validation failed",
+        "details": {
+          "method": "PATCH",
+          "path": "/social-sets/123/drafts/654",
+          "status": 422,
+          "retryable": false,
+          "target": { "index": 1, "social_set_id": 123, "draft_id": 654 }
+        }
+      }
+    }
+  ]
+}
+```
+
 ## Commands
+
+### `doctor`
+
+Inspect local runtime, API key, base URL, and Typefully auth readiness.
+
+```bash
+typefully doctor
+```
+
+### `capabilities`
+
+Describe supported commands, protocol conventions, batch behavior, output modes, and idempotency status.
+
+```bash
+typefully capabilities
+```
+
+### `schema list` / `schema show`
+
+List and inspect JSON input schemas derived from the same Effect schemas used for validation.
+
+```bash
+typefully schema list
+typefully schema show drafts.create
+```
+
+### `examples list` / `examples show`
+
+List and inspect executable examples.
+
+```bash
+typefully examples list
+typefully examples show "analytics posts"
+```
 
 ### `auth status`
 
@@ -86,10 +163,10 @@ typefully me
 
 ### `social-sets list`
 
-List social sets. Uses `--limit` and `--offset` options (not JSON input).
+List social sets from a JSON payload with optional `limit` and `offset`.
 
 ```bash
-typefully social-sets list --limit 10 --offset 0
+typefully social-sets list @examples/social-sets/list.json
 ```
 
 ### `social-sets get`
@@ -122,6 +199,7 @@ List drafts from a JSON input object containing `social_set_id` and optional fil
 
 ```bash
 typefully drafts list @examples/drafts/list.json
+typefully drafts list @examples/drafts/list.json --output artifact
 ```
 
 ### `drafts get`
@@ -166,6 +244,7 @@ Get queue slots and scheduled drafts for a date range.
 
 ```bash
 typefully queue get @examples/queue/get.json
+typefully queue get @examples/queue/get.json --output auto
 ```
 
 ### `queue schedule get`
@@ -190,6 +269,7 @@ Get analytics posts for a social set, platform, and date range.
 
 ```bash
 typefully analytics posts @examples/analytics/posts.json
+typefully analytics posts @examples/analytics/posts.json --output artifact
 ```
 
 ### `linkedin organizations resolve`
@@ -221,7 +301,7 @@ Upload a local file. Waits for `ready` by default.
 typefully media upload @examples/media/upload.json
 
 # return immediately after the raw PUT upload
-typefully media upload '{"social_set_id":123,"file_path":"./image.png","wait_for_ready":false}'
+typefully media upload @examples/media/upload-no-wait.json
 ```
 
 Use the returned `media_id` in draft creation:
@@ -248,6 +328,10 @@ Use the returned `media_id` in draft creation:
 - Prefer `@file` JSON inputs so prompts stay small and reproducible.
 - Use array payloads for batch draft mutations when an agent can tolerate partial success.
 - On batch failures, the CLI still returns a success envelope on `stdout` with per-item results and sets exit code `1` when any item fails.
+- Use `schema show <command-id>` before generating payloads and `examples show <command-id>` for copy-pastable argument shapes.
+- Use `--output artifact` for list/analytics/queue/media diagnostic responses that are too large to keep inline.
+- Expected failures include structured recovery fields such as `hint`, `retryable`, provider `method`/`path`/`status`, and batch `target` IDs.
+- Treat `drafts create` retries carefully. Without provider idempotency support, a retry after an unknown network result can create duplicates.
 - Media uploads follow the documented Typefully v2 flow: request a presigned URL, upload raw file bytes with a plain `PUT`, then poll `/media/{media_id}` until `ready`, `failed`, or timeout.
 
 ## License

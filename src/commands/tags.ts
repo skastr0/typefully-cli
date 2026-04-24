@@ -1,6 +1,7 @@
-import { Args, Command } from "@effect/cli"
+import { Args, Command, Options } from "@effect/cli"
 import { Effect, Schema } from "effect"
 
+import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
 import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
@@ -10,7 +11,12 @@ const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
 )
 
-const tagsListInputSchema = Schema.Struct({
+const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
+  Options.withDefault("inline"),
+  Options.withDescription("Output policy for potentially large responses: inline, artifact, or auto"),
+)
+
+export const tagsListInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   limit: Schema.optional(Schema.Number),
   offset: Schema.optional(Schema.Number),
@@ -18,7 +24,7 @@ const tagsListInputSchema = Schema.Struct({
 
 type TagsListInput = typeof tagsListInputSchema.Type
 
-const tagsCreateInputSchema = Schema.Struct({
+export const tagsCreateInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   name: Schema.String,
 })
@@ -78,7 +84,7 @@ const validateTagsCreateInput = (input: TagsCreateInput) => {
   return Effect.void
 }
 
-const tagsListCommand = Command.make("list", { input: jsonInputArg }, ({ input }) =>
+const tagsListCommand = Command.make("list", { input: jsonInputArg, output: outputOption }, ({ input, output }) =>
   executeJsonCommand(
     "tags list",
     Effect.gen(function* () {
@@ -91,7 +97,14 @@ const tagsListCommand = Command.make("list", { input: jsonInputArg }, ({ input }
         ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
       })
 
-      return { tags }
+      return yield* applyOutputPolicy({
+        outputMode: output,
+        command: "tags list",
+        data: { tags },
+        artifactKey: "tags.list",
+        artifactLabel: "tags list response",
+        summary: `Wrote ${tags.results.length} records from tags list to an artifact.`,
+      })
     }),
   ),
 ).pipe(

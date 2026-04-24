@@ -2,9 +2,10 @@ import { readFile, stat } from "node:fs/promises"
 import { basename } from "node:path"
 
 import { HttpClient } from "@effect/platform"
-import { Args, Command } from "@effect/cli"
+import { Args, Command, Options } from "@effect/cli"
 import { Effect, Schema } from "effect"
 
+import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
 import {
   CommandInputError,
   MediaFileError,
@@ -28,7 +29,12 @@ const jsonInputArg = Args.text({ name: "input" }).pipe(
   Args.withDescription("JSON object, @file path, raw JSON string, or - for stdin"),
 )
 
-const mediaUploadInputSchema = Schema.Struct({
+const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
+  Options.withDefault("inline"),
+  Options.withDescription("Output policy for media diagnostics: inline, artifact, or auto"),
+)
+
+export const mediaUploadInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
   file_path: Schema.String,
   file_name: Schema.optional(Schema.String),
@@ -239,7 +245,7 @@ const buildUploadResponse = (params: {
   }
 }
 
-const runMediaUpload = (input: string) =>
+const runMediaUpload = (input: string, outputMode: "inline" | "artifact" | "auto") =>
   Effect.gen(function* () {
     const payload = yield* loadJsonInput(mediaUploadInputSchema, input)
     yield* validateUploadInput(payload)
@@ -262,11 +268,20 @@ const runMediaUpload = (input: string) =>
     const waitForReady = payload.wait_for_ready ?? true
 
     if (!waitForReady) {
-      return buildUploadResponse({
+      const response = buildUploadResponse({
         input: payload,
         fileName,
         mediaId: presignedUpload.media_id,
         waited: false,
+      })
+
+      return yield* applyOutputPolicy({
+        outputMode,
+        command: "media upload",
+        data: response,
+        artifactKey: "media.upload",
+        artifactLabel: "media upload response",
+        summary: `Wrote media upload diagnostics for ${presignedUpload.media_id} to an artifact.`,
       })
     }
 
@@ -277,7 +292,7 @@ const runMediaUpload = (input: string) =>
       pollIntervalMs: payload.poll_interval_ms ?? DEFAULT_MEDIA_POLL_INTERVAL_MS,
     })
 
-    return buildUploadResponse({
+    const response = buildUploadResponse({
       input: payload,
       fileName,
       mediaId: presignedUpload.media_id,
@@ -285,10 +300,21 @@ const runMediaUpload = (input: string) =>
       timedOut: pollResult.timed_out,
       media: pollResult.media,
     })
+
+    return yield* applyOutputPolicy({
+      outputMode,
+      command: "media upload",
+      data: response,
+      artifactKey: "media.upload",
+      artifactLabel: "media upload response",
+      summary: `Wrote media upload diagnostics for ${presignedUpload.media_id} to an artifact.`,
+    })
   })
 
-const mediaUploadCommand = Command.make("upload", { input: jsonInputArg }, ({ input }) =>
-  executeJsonCommand("media upload", runMediaUpload(input)),
+const mediaUploadCommand = Command.make(
+  "upload",
+  { input: jsonInputArg, output: outputOption },
+  ({ input, output }) => executeJsonCommand("media upload", runMediaUpload(input, output)),
 ).pipe(
   Command.withDescription(
     "Upload a local file using a JSON input object with social_set_id, file_path, and optional wait controls",
