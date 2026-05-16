@@ -25,6 +25,10 @@ import {
   CLI_VERSION,
   TYPEFULLY_API_BASE_URL_ENV,
   TYPEFULLY_API_KEY_ENV,
+  TYPEFULLY_ARTIFACT_DIR_ENV,
+  TYPEFULLY_AUTH_PATH_ENV,
+  TYPEFULLY_CACHE_DIR_ENV,
+  TYPEFULLY_HOME_ENV,
 } from "../core/constants"
 import type { CommandCapability, CommandExample, CommandSchemaContract } from "../core/discovery"
 import { renderSchemaContract } from "../core/discovery"
@@ -420,15 +424,19 @@ const renderExample = (example: CommandExample) => ({
 
 const doctorReport = Effect.gen(function* () {
   const configResult = yield* Effect.either(loadAppConfig())
-  const hasApiKey = (Bun.env[TYPEFULLY_API_KEY_ENV]?.trim().length ?? 0) > 0
+  const hasApiKey = Either.isRight(configResult) && configResult.right.apiKeySource !== "none"
 
   const apiKeyCheck = {
     name: "config.api_key",
     ok: hasApiKey,
     details: {
       env_var: TYPEFULLY_API_KEY_ENV,
+      source: Either.isRight(configResult) ? configResult.right.apiKeySource : "unknown",
+      auth_path: Either.isRight(configResult) ? configResult.right.authPath : undefined,
       required_for: ["API-backed workflow commands"],
-      hint: hasApiKey ? "API key is configured." : `Set ${TYPEFULLY_API_KEY_ENV} before API-backed commands.`,
+      hint: hasApiKey
+        ? "API key is configured."
+        : `Run auth set, auth import-env, or set ${TYPEFULLY_API_KEY_ENV} before API-backed commands.`,
       retryable: false,
     },
   }
@@ -484,6 +492,8 @@ const doctorReport = Effect.gen(function* () {
         configured: authStatus.configured,
         authenticated: authStatus.authenticated,
         api_base_url: authStatus.api_base_url,
+        auth_path: authStatus.auth_path,
+        api_key_source: authStatus.api_key_source,
         status: authStatus.status,
         ...(authStatus.error ? { error: authStatus.error } : {}),
         ...(authStatus.details ? { provider_details: authStatus.details } : {}),
@@ -516,6 +526,7 @@ const capabilities = Effect.succeed({
     provider: "typefully",
     base_url_env: TYPEFULLY_API_BASE_URL_ENV,
     api_key_env: TYPEFULLY_API_KEY_ENV,
+    auth_path_env: TYPEFULLY_AUTH_PATH_ENV,
     supported_features: [
       "auth status",
       "social sets",
@@ -542,7 +553,18 @@ const capabilities = Effect.succeed({
   idempotency: noDurableIdempotency,
   artifacts: {
     policy: "Use --output inline|artifact|auto on list, analytics, queue, and media diagnostic commands.",
-    env_var: "TYPEFULLY_ARTIFACT_DIR",
+    env_var: TYPEFULLY_ARTIFACT_DIR_ENV,
+    default_location: "~/.typefully/artifacts",
+  },
+  runtime_paths: {
+    home_env: TYPEFULLY_HOME_ENV,
+    auth_path_env: TYPEFULLY_AUTH_PATH_ENV,
+    cache_dir_env: TYPEFULLY_CACHE_DIR_ENV,
+    artifact_dir_env: TYPEFULLY_ARTIFACT_DIR_ENV,
+    default_home: "~/.typefully",
+    default_auth_path: "~/.typefully/auth.json",
+    default_cache_dir: "~/.typefully/cache",
+    default_artifact_dir: "~/.typefully/artifacts",
   },
   discovery: {
     commands: discoveryCapabilities.map((capability) => capability.command),

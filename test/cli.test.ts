@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { mkdtempSync, readFileSync, statSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import { expectJson, runCli } from "./helpers/cli"
 
@@ -43,6 +46,132 @@ describe("typefully CLI foundation", () => {
     expect(payload.command).toBe("auth status")
     expect(payload.data.configured).toBe(false)
     expect(payload.data.authenticated).toBe(false)
+  })
+
+  test("auth commands save API key to the local auth file", async () => {
+    const typefullyHome = mkdtempSync(join(tmpdir(), "typefully-cli-auth-"))
+
+    const pathResult = await runCli(["auth", "path"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: undefined,
+    })
+    const pathPayload = expectJson<{
+      data: { auth_path: string }
+    }>(pathResult.stdout)
+
+    expect(pathResult.exitCode).toBe(0)
+    expect(pathPayload.data.auth_path).toBe(join(typefullyHome, "auth.json"))
+
+    const setResult = await runCli(["auth", "set", "test-token"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: undefined,
+    })
+    const setPayload = expectJson<{
+      data: { auth_path: string; api_key_configured: boolean }
+    }>(setResult.stdout)
+
+    expect(setResult.exitCode).toBe(0)
+    expect(setResult.stderr.trim()).toBe("")
+    expect(setResult.stdout).not.toContain("test-token")
+    expect(setPayload.data.api_key_configured).toBe(true)
+    expect(JSON.parse(readFileSync(pathPayload.data.auth_path, "utf8"))).toEqual({
+      api_key: "test-token",
+    })
+    expect(statSync(typefullyHome).mode & 0o777).toBe(0o700)
+    expect(statSync(pathPayload.data.auth_path).mode & 0o777).toBe(0o600)
+  })
+
+  test("auth import-env saves TYPEFULLY_API_KEY to local auth", async () => {
+    const typefullyHome = mkdtempSync(join(tmpdir(), "typefully-cli-auth-env-"))
+
+    const result = await runCli(["auth", "import-env"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_API_KEY: "env-token",
+      TYPEFULLY_API_BASE_URL: undefined,
+    })
+    const payload = expectJson<{
+      data: { auth_path: string; api_key_configured: boolean }
+    }>(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(payload.data.api_key_configured).toBe(true)
+    expect(JSON.parse(readFileSync(payload.data.auth_path, "utf8"))).toEqual({
+      api_key: "env-token",
+    })
+  })
+
+  test("API commands use stored auth when TYPEFULLY_API_KEY is absent", async () => {
+    const typefullyHome = mkdtempSync(join(tmpdir(), "typefully-cli-stored-auth-"))
+    const seenAuthHeaders: Array<string | null> = []
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        seenAuthHeaders.push(request.headers.get("authorization"))
+
+        return new Response(
+          JSON.stringify({
+            id: "user_123",
+            name: "Stored User",
+          }),
+          {
+            headers: { "content-type": "application/json" },
+          },
+        )
+      },
+    })
+    servers.push(server)
+
+    await runCli(["auth", "set", "stored-token"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: undefined,
+    })
+
+    const result = await runCli(["me"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: `http://127.0.0.1:${server.port}/v2`,
+    })
+    const payload = expectJson<{
+      data: { me: { id: string; name?: string } }
+    }>(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(payload.data.me.id).toBe("user_123")
+    expect(seenAuthHeaders).toEqual(["Bearer stored-token"])
+  })
+
+  test("TYPEFULLY_API_KEY takes precedence over stored auth", async () => {
+    const typefullyHome = mkdtempSync(join(tmpdir(), "typefully-cli-auth-precedence-"))
+    const seenAuthHeaders: Array<string | null> = []
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        seenAuthHeaders.push(request.headers.get("authorization"))
+
+        return new Response(JSON.stringify({ id: "user_123" }), {
+          headers: { "content-type": "application/json" },
+        })
+      },
+    })
+    servers.push(server)
+
+    await runCli(["auth", "set", "stored-token"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: undefined,
+    })
+
+    const result = await runCli(["me"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_API_KEY: "env-token",
+      TYPEFULLY_API_BASE_URL: `http://127.0.0.1:${server.port}/v2`,
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(seenAuthHeaders).toEqual(["Bearer env-token"])
   })
 
   test("me fetches the current account with the explicit typed subset", async () => {

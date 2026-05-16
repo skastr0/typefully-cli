@@ -6,11 +6,17 @@ import {
   TYPEFULLY_API_KEY_HINT,
   TYPEFULLY_DEFAULT_API_BASE_URL,
 } from "./constants"
+import { readStoredAuthSafe } from "./auth"
+import { resolveRuntimePaths } from "./runtime-paths"
 import { ConfigurationError, MissingApiKeyError } from "./errors"
 
 export interface AppConfig {
   readonly apiBaseUrl: string
   readonly apiKey?: string
+  readonly apiKeySource: "env" | "stored" | "none"
+  readonly authPath: string
+  readonly cacheDir: string
+  readonly artifactsDir: string
 }
 
 const normalizeBaseUrl = (rawValue: string): Effect.Effect<string, ConfigurationError> =>
@@ -35,14 +41,27 @@ const normalizeBaseUrl = (rawValue: string): Effect.Effect<string, Configuration
   })
 
 export const loadAppConfig = Effect.fn("loadAppConfig")(function* () {
+  const paths = resolveRuntimePaths()
   const apiBaseUrl = yield* normalizeBaseUrl(
     Bun.env[TYPEFULLY_API_BASE_URL_ENV] ?? TYPEFULLY_DEFAULT_API_BASE_URL,
   )
 
-  const apiKey = Bun.env[TYPEFULLY_API_KEY_ENV]?.trim()
+  const envApiKey = Bun.env[TYPEFULLY_API_KEY_ENV]?.trim()
+  const storedAuth = readStoredAuthSafe(paths.authPath)
+  const storedApiKey = storedAuth.api_key?.trim()
+  const apiKey = envApiKey && envApiKey.length > 0 ? envApiKey : storedApiKey
+  const apiKeySource = envApiKey && envApiKey.length > 0
+    ? "env"
+    : storedApiKey && storedApiKey.length > 0
+      ? "stored"
+      : "none"
 
   return {
     apiBaseUrl,
+    apiKeySource,
+    authPath: paths.authPath,
+    cacheDir: paths.cacheDir,
+    artifactsDir: paths.artifactsDir,
     ...(apiKey && apiKey.length > 0 ? { apiKey } : {}),
   } satisfies AppConfig
 })

@@ -1,4 +1,7 @@
 import { expect } from "bun:test"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 export interface CliResult {
   readonly stdout: string
@@ -15,9 +18,11 @@ export const runCli = async (
   env: Record<string, string | undefined>,
   options?: RunCliOptions,
 ): Promise<CliResult> => {
+  const typefullyHome = env.TYPEFULLY_HOME ?? mkdtempSync(join(tmpdir(), "typefully-cli-home-"))
   const processEnv = Object.fromEntries(
     Object.entries({
       ...Bun.env,
+      TYPEFULLY_HOME: typefullyHome,
       ...env,
     }).filter((entry): entry is [string, string] => entry[1] !== undefined),
   )

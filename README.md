@@ -28,11 +28,19 @@ bun run dev <command>
 ## Environment
 
 ```bash
+typefully auth set "tfy_..."
+# or export an env key for this process; env takes precedence over stored auth
 export TYPEFULLY_API_KEY="tfy_..."
 # optional, defaults to the public v2 API
 export TYPEFULLY_API_BASE_URL="https://api.typefully.com/v2"
-# optional, defaults to .typefully-cli/artifacts under the current directory
-export TYPEFULLY_ARTIFACT_DIR=".typefully-cli/artifacts"
+# optional, defaults to ~/.typefully
+export TYPEFULLY_HOME="$HOME/.typefully"
+# optional, defaults to ~/.typefully/auth.json
+export TYPEFULLY_AUTH_PATH="$HOME/.typefully/auth.json"
+# optional, defaults to ~/.typefully/cache
+export TYPEFULLY_CACHE_DIR="$HOME/.typefully/cache"
+# optional, defaults to ~/.typefully/artifacts
+export TYPEFULLY_ARTIFACT_DIR="$HOME/.typefully/artifacts"
 ```
 
 ## JSON-first contract
@@ -68,7 +76,7 @@ export TYPEFULLY_ARTIFACT_DIR=".typefully-cli/artifacts"
 - `drafts create`, `drafts update`, and `drafts delete` accept arrays and run them concurrently with `--concurrency <n>` (default `5`).
 - Batch mutation results include `outcome`, counts, `concurrency`, ordered `results`, and per-item `target` identifiers. The process exits with code `1` if any item fails.
 - PATCH payloads use **omit to leave unchanged** semantics. Prefer omission over `null`.
-- Potentially large reads support `--output inline|artifact|auto`. Artifact mode writes JSON under `.typefully-cli/artifacts` by default; set `TYPEFULLY_ARTIFACT_DIR` to override it.
+- Potentially large reads support `--output inline|artifact|auto`. Artifact mode writes JSON under `~/.typefully/artifacts` by default; set `TYPEFULLY_ARTIFACT_DIR` to override it.
 - Discovery commands expose the machine contract: `capabilities`, `doctor`, `schema list/show`, and `examples list/show`.
 - Typefully v2 does not expose documented idempotency keys. The CLI does not emulate durable mutation idempotency because doing so would overstate retry safety for create/update/delete calls.
 - `media upload` waits for `ready` by default. Set `wait_for_ready: false` to return right after the presigned PUT upload.
@@ -145,11 +153,15 @@ typefully examples list
 typefully examples show "analytics posts"
 ```
 
-### `auth status`
+### `auth path` / `auth set` / `auth import-env` / `auth status`
 
-Check whether the configured API key works against Typefully v2.
+Save and inspect local auth, then check whether the configured API key works against Typefully v2. The local auth file defaults to `~/.typefully/auth.json`; its parent directory is created with `0700` permissions and the auth file is written with `0600` permissions.
 
 ```bash
+typefully auth path
+typefully auth set "tfy_..."
+TYPEFULLY_API_KEY="tfy_..." typefully auth import-env
+typefully auth local-status
 typefully auth status
 ```
 
@@ -329,7 +341,7 @@ Use the returned `media_id` in draft creation:
 - Use array payloads for batch draft mutations when an agent can tolerate partial success.
 - On batch failures, the CLI still returns a success envelope on `stdout` with per-item results and sets exit code `1` when any item fails.
 - Use `schema show <command-id>` before generating payloads and `examples show <command-id>` for copy-pastable argument shapes.
-- Use `--output artifact` for list/analytics/queue/media diagnostic responses that are too large to keep inline.
+- Use `--output artifact` for list/analytics/queue/media diagnostic responses that are too large to keep inline. Artifacts default to `~/.typefully/artifacts`; set `TYPEFULLY_ARTIFACT_DIR` to override.
 - Expected failures include structured recovery fields such as `hint`, `retryable`, provider `method`/`path`/`status`, and batch `target` IDs.
 - Treat `drafts create` retries carefully. Without provider idempotency support, a retry after an unknown network result can create duplicates.
 - Media uploads follow the documented Typefully v2 flow: request a presigned URL, upload raw file bytes with a plain `PUT`, then poll `/media/{media_id}` until `ready`, `failed`, or timeout.

@@ -422,6 +422,8 @@ export interface TypefullyAuthStatus {
   readonly configured: boolean
   readonly authenticated: boolean
   readonly api_base_url: string
+  readonly auth_path: string
+  readonly api_key_source: "env" | "stored" | "none"
   readonly status: number | null
   readonly social_set_count: number
   readonly social_sets_preview?: SocialSetListResponse["results"]
@@ -873,9 +875,11 @@ export const getAuthStatus = Effect.gen(function* () {
       configured: false,
       authenticated: false,
       api_base_url: config.apiBaseUrl,
+      auth_path: config.authPath,
+      api_key_source: config.apiKeySource,
       status: null,
       social_set_count: 0,
-      error: "TYPEFULLY_API_KEY is not configured",
+      error: "TYPEFULLY_API_KEY is not configured and no stored Typefully API key exists",
     })
   }
 
@@ -886,6 +890,8 @@ export const getAuthStatus = Effect.gen(function* () {
           configured: true,
           authenticated: true,
           api_base_url: config.apiBaseUrl,
+          auth_path: config.authPath,
+          api_key_source: config.apiKeySource,
           status: 200,
           social_set_count: response.count,
           social_sets_preview: response.results,
@@ -897,6 +903,8 @@ export const getAuthStatus = Effect.gen(function* () {
           configured: true,
           authenticated: false,
           api_base_url: config.apiBaseUrl,
+          auth_path: config.authPath,
+          api_key_source: config.apiKeySource,
           status: error.status,
           social_set_count: 0,
           error: error.message,
@@ -909,6 +917,8 @@ export const getAuthStatus = Effect.gen(function* () {
           configured: true,
           authenticated: false,
           api_base_url: config.apiBaseUrl,
+          auth_path: config.authPath,
+          api_key_source: config.apiKeySource,
           status: null,
           social_set_count: 0,
           error: error.message,

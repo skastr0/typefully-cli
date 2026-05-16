@@ -3,8 +3,8 @@ import { join, relative, resolve } from "node:path"
 
 import { Effect } from "effect"
 
-import { TYPEFULLY_ARTIFACT_DIR_ENV } from "./constants"
 import { ArtifactWriteError } from "./errors"
+import { resolveRuntimePaths } from "./runtime-paths"
 
 export const OUTPUT_MODE_VALUES = ["inline", "artifact", "auto"] as const
 
@@ -29,8 +29,7 @@ export interface ArtifactResult {
 }
 
 const artifactDir = () => {
-  const configured = Bun.env[TYPEFULLY_ARTIFACT_DIR_ENV]?.trim()
-  return resolve(configured && configured.length > 0 ? configured : join(process.cwd(), ".typefully-cli", "artifacts"))
+  return resolve(resolveRuntimePaths().artifactsDir)
 }
 
 const safeSegment = (value: string) =>
