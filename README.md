@@ -28,7 +28,7 @@ bun run dev <command>
 ## Environment
 
 ```bash
-typefully auth set "tfy_..."
+printf '%s' "tfy_..." | typefully auth set
 # or export an env key for this process; env takes precedence over stored auth
 export TYPEFULLY_API_KEY="tfy_..."
 # optional, defaults to the public v2 API
@@ -159,7 +159,7 @@ Save and inspect local auth, then check whether the configured API key works aga
 
 ```bash
 typefully auth path
-typefully auth set "tfy_..."
+printf '%s' "tfy_..." | typefully auth set
 TYPEFULLY_API_KEY="tfy_..." typefully auth import-env
 typefully auth local-status
 typefully auth status

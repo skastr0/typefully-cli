@@ -43,6 +43,12 @@ describe("typefully discovery commands", () => {
       data: {
         batch: { outcome_values: string[]; partial_failure_exit_code: number }
         idempotency: { supported: boolean; strategy: string }
+        runtime_paths: {
+          home_env: string
+          auth_path_env: string
+          cache_dir_env: string
+          default_cache_dir: string
+        }
         commands: Array<{
           command_id: string
           output?: { modes: string[] }
@@ -59,6 +65,14 @@ describe("typefully discovery commands", () => {
     expect(payload.data.batch.partial_failure_exit_code).toBe(1)
     expect(payload.data.idempotency.supported).toBe(false)
     expect(payload.data.idempotency.strategy).toContain("does not expose documented idempotency keys")
+    expect(payload.data.runtime_paths).toEqual(
+      expect.objectContaining({
+        home_env: "TYPEFULLY_HOME",
+        auth_path_env: "TYPEFULLY_AUTH_PATH",
+        cache_dir_env: "TYPEFULLY_CACHE_DIR",
+        default_cache_dir: "~/.typefully/cache",
+      }),
+    )
     expect(payload.data.commands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -1,4 +1,5 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { randomUUID } from "node:crypto"
 import { dirname } from "node:path"
 
 import { TYPEFULLY_API_KEY_ENV } from "./constants"
@@ -45,15 +46,30 @@ export const readStoredAuthSafe = (authPath = getAuthPath()): StoredAuth => {
 }
 
 const writeStoredAuth = (auth: StoredAuth, authPath = getAuthPath()) => {
-  mkdirSync(dirname(authPath), { recursive: true, mode: 0o700 })
-  const tempPath = `${authPath}.${process.pid}.tmp`
-  writeFileSync(tempPath, `${JSON.stringify(auth, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  })
-  chmodSync(tempPath, 0o600)
-  renameSync(tempPath, authPath)
-  chmodSync(authPath, 0o600)
+  const authDir = dirname(authPath)
+  mkdirSync(authDir, { recursive: true, mode: 0o700 })
+
+  const dirStats = lstatSync(authDir)
+  if (!dirStats.isDirectory() || dirStats.isSymbolicLink()) {
+    throw new Error(`Auth directory is not a safe directory: ${authDir}`)
+  }
+
+  chmodSync(authDir, 0o700)
+  const tempPath = `${authPath}.${process.pid}.${randomUUID()}.tmp`
+
+  try {
+    writeFileSync(tempPath, `${JSON.stringify(auth, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx",
+    })
+    chmodSync(tempPath, 0o600)
+    renameSync(tempPath, authPath)
+    chmodSync(authPath, 0o600)
+  } catch (error) {
+    rmSync(tempPath, { force: true })
+    throw error
+  }
 }
 
 export const saveAuthKey = (apiKey: string, authPath = getAuthPath()): StoredAuthStatus => {

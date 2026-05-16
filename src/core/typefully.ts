@@ -908,7 +908,12 @@ export const getAuthStatus = Effect.gen(function* () {
           status: error.status,
           social_set_count: 0,
           error: error.message,
-          details: error.body,
+          details: {
+            method: error.method,
+            path: error.path,
+            status: error.status,
+            provider_body_omitted: true,
+          },
         }))
       }
 

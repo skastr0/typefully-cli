@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync, statSync } from "node:fs"
+import { chmodSync, mkdtempSync, readFileSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -63,11 +63,15 @@ describe("typefully CLI foundation", () => {
     expect(pathResult.exitCode).toBe(0)
     expect(pathPayload.data.auth_path).toBe(join(typefullyHome, "auth.json"))
 
-    const setResult = await runCli(["auth", "set", "test-token"], {
-      TYPEFULLY_HOME: typefullyHome,
-      TYPEFULLY_API_KEY: undefined,
-      TYPEFULLY_API_BASE_URL: undefined,
-    })
+    const setResult = await runCli(
+      ["auth", "set"],
+      {
+        TYPEFULLY_HOME: typefullyHome,
+        TYPEFULLY_API_KEY: undefined,
+        TYPEFULLY_API_BASE_URL: undefined,
+      },
+      { stdinText: "test-token" },
+    )
     const setPayload = expectJson<{
       data: { auth_path: string; api_key_configured: boolean }
     }>(setResult.stdout)
@@ -81,6 +85,41 @@ describe("typefully CLI foundation", () => {
     })
     expect(statSync(typefullyHome).mode & 0o777).toBe(0o700)
     expect(statSync(pathPayload.data.auth_path).mode & 0o777).toBe(0o600)
+  })
+
+  test("auth set tightens an existing auth directory before writing secrets", async () => {
+    const typefullyHome = mkdtempSync(join(tmpdir(), "typefully-cli-auth-open-"))
+    chmodSync(typefullyHome, 0o777)
+
+    const result = await runCli(
+      ["auth", "set"],
+      {
+        TYPEFULLY_HOME: typefullyHome,
+        TYPEFULLY_API_KEY: undefined,
+        TYPEFULLY_API_BASE_URL: undefined,
+      },
+      { stdinText: "test-token" },
+    )
+
+    expect(result.exitCode).toBe(0)
+    expect(statSync(typefullyHome).mode & 0o777).toBe(0o700)
+    expect(statSync(join(typefullyHome, "auth.json")).mode & 0o777).toBe(0o600)
+  })
+
+  test("TYPEFULLY_AUTH_PATH overrides the default auth file location", async () => {
+    const typefullyHome = mkdtempSync(join(tmpdir(), "typefully-cli-auth-path-"))
+    const authPath = join(typefullyHome, "nested", "auth.json")
+
+    const result = await runCli(["auth", "path"], {
+      TYPEFULLY_HOME: typefullyHome,
+      TYPEFULLY_AUTH_PATH: authPath,
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: undefined,
+    })
+    const payload = expectJson<{ data: { auth_path: string } }>(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(payload.data.auth_path).toBe(authPath)
   })
 
   test("auth import-env saves TYPEFULLY_API_KEY to local auth", async () => {
@@ -123,11 +162,15 @@ describe("typefully CLI foundation", () => {
     })
     servers.push(server)
 
-    await runCli(["auth", "set", "stored-token"], {
-      TYPEFULLY_HOME: typefullyHome,
-      TYPEFULLY_API_KEY: undefined,
-      TYPEFULLY_API_BASE_URL: undefined,
-    })
+    await runCli(
+      ["auth", "set"],
+      {
+        TYPEFULLY_HOME: typefullyHome,
+        TYPEFULLY_API_KEY: undefined,
+        TYPEFULLY_API_BASE_URL: undefined,
+      },
+      { stdinText: "stored-token" },
+    )
 
     const result = await runCli(["me"], {
       TYPEFULLY_HOME: typefullyHome,
@@ -158,11 +201,15 @@ describe("typefully CLI foundation", () => {
     })
     servers.push(server)
 
-    await runCli(["auth", "set", "stored-token"], {
-      TYPEFULLY_HOME: typefullyHome,
-      TYPEFULLY_API_KEY: undefined,
-      TYPEFULLY_API_BASE_URL: undefined,
-    })
+    await runCli(
+      ["auth", "set"],
+      {
+        TYPEFULLY_HOME: typefullyHome,
+        TYPEFULLY_API_KEY: undefined,
+        TYPEFULLY_API_BASE_URL: undefined,
+      },
+      { stdinText: "stored-token" },
+    )
 
     const result = await runCli(["me"], {
       TYPEFULLY_HOME: typefullyHome,
@@ -262,6 +309,41 @@ describe("typefully CLI foundation", () => {
     expect(payload.command).toBe("me")
     expect(payload.error.type).toBe("TypefullyApiError")
     expect(payload.error.details.status).toBe(401)
+  })
+
+  test("auth status omits raw provider error bodies from success output", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(
+          JSON.stringify({
+            error: "Unauthorized",
+            api_key: "tfy_FAKELEAK123",
+            token: "fake-token",
+          }),
+          {
+            status: 401,
+            headers: { "content-type": "application/json" },
+          },
+        )
+      },
+    })
+    servers.push(server)
+
+    const result = await runCli(["auth", "status"], {
+      TYPEFULLY_API_KEY: "test-token",
+      TYPEFULLY_API_BASE_URL: `http://127.0.0.1:${server.port}/v2`,
+    })
+    const payload = expectJson<{
+      data: {
+        details?: { provider_body_omitted?: boolean }
+      }
+    }>(result.stdout)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).not.toContain("tfy_FAKELEAK123")
+    expect(result.stdout).not.toContain("fake-token")
+    expect(payload.data.details?.provider_body_omitted).toBe(true)
   })
 
   test("social-sets list forwards pagination to Typefully v2", async () => {

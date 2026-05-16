@@ -1,3 +1,4 @@
+import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 
 import {
@@ -29,7 +30,7 @@ const optionalEnv = (env: NodeJS.ProcessEnv, key: string) => {
 }
 
 export const resolveRuntimePaths = (env: NodeJS.ProcessEnv = process.env): RuntimePaths => {
-  const homeDir = env.HOME ?? process.cwd()
+  const homeDir = optionalEnv(env, "HOME") ?? homedir()
   const typefullyHome = resolve(expandHomePath(optionalEnv(env, TYPEFULLY_HOME_ENV) ?? "~/.typefully", homeDir))
   const authPath = resolve(
     expandHomePath(optionalEnv(env, TYPEFULLY_AUTH_PATH_ENV) ?? join(typefullyHome, "auth.json"), homeDir),

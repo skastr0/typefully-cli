@@ -1,13 +1,14 @@
-import { Args, Command } from "@effect/cli"
+import { Command } from "@effect/cli"
 import { Effect } from "effect"
 
 import { authStatus, getAuthPath, importAuthFromEnv, saveAuthKey } from "../core/auth"
 import { executeJsonCommand } from "../core/output"
 import { getAuthStatus } from "../core/typefully"
 
-const apiKeyArg = Args.text({ name: "api_key" }).pipe(
-  Args.withDescription("Typefully API key from Typefully Settings -> API"),
-)
+const readApiKeyFromStdin = Effect.tryPromise({
+  try: () => new Response(Bun.stdin.stream()).text(),
+  catch: (cause) => cause instanceof Error ? cause : new Error("Failed to read API key from stdin"),
+})
 
 const authStatusCommand = Command.make("status", {}, () =>
   executeJsonCommand("auth status", getAuthStatus),
@@ -17,9 +18,15 @@ const authPathCommand = Command.make("path", {}, () =>
   executeJsonCommand("auth path", Effect.sync(() => ({ auth_path: getAuthPath() }))),
 ).pipe(Command.withDescription("Print the local Typefully auth file path"))
 
-const authSetCommand = Command.make("set", { apiKey: apiKeyArg }, ({ apiKey }) =>
-  executeJsonCommand("auth set", Effect.sync(() => saveAuthKey(apiKey))),
-).pipe(Command.withDescription("Save a Typefully API key to the local auth file"))
+const authSetCommand = Command.make("set", {}, () =>
+  executeJsonCommand(
+    "auth set",
+    Effect.gen(function* () {
+      const apiKey = yield* readApiKeyFromStdin
+      return saveAuthKey(apiKey)
+    }),
+  ),
+).pipe(Command.withDescription("Save a Typefully API key from stdin to the local auth file"))
 
 const authImportEnvCommand = Command.make("import-env", {}, () =>
   executeJsonCommand("auth import-env", Effect.sync(() => importAuthFromEnv())),
