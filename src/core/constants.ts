@@ -9,5 +9,6 @@ export const TYPEFULLY_CACHE_TTL_SECONDS_ENV = "TYPEFULLY_CACHE_TTL_SECONDS"
 export const TYPEFULLY_ARTIFACT_DIR_ENV = "TYPEFULLY_ARTIFACT_DIR"
 export const TYPEFULLY_DEFAULT_API_BASE_URL = "https://api.typefully.com/v2"
 export const TYPEFULLY_DEFAULT_CACHE_TTL_SECONDS = 60 * 60
-export const TYPEFULLY_API_KEY_HINT = "Run `typefully auth set <api-key>` or export TYPEFULLY_API_KEY from Typefully Settings -> API."
+export const TYPEFULLY_API_KEY_HINT =
+  "Run `printf '%s' \"$TYPEFULLY_API_KEY\" | typefully auth set` or export TYPEFULLY_API_KEY from Typefully Settings -> API."
 export const TYPEFULLY_USER_AGENT = `${CLI_NAME}/${CLI_VERSION}`

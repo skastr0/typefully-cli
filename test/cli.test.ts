@@ -48,6 +48,26 @@ describe("typefully CLI foundation", () => {
     expect(payload.data.authenticated).toBe(false)
   })
 
+  test("API commands report stdin auth setup when the API key is missing", async () => {
+    const result = await runCli(["me"], {
+      TYPEFULLY_API_KEY: undefined,
+      TYPEFULLY_API_BASE_URL: "http://127.0.0.1:65535/v2",
+    })
+    const payload = expectJson<{
+      error: {
+        type: string
+        details?: {
+          hint?: string
+        }
+      }
+    }>(result.stderr)
+
+    expect(result.exitCode).toBe(1)
+    expect(payload.error.type).toBe("MissingApiKeyError")
+    expect(payload.error.details?.hint).toContain("typefully auth set")
+    expect(payload.error.details?.hint).not.toContain("<api-key>")
+  })
+
   test("auth commands save API key to the local auth file", async () => {
     const typefullyHome = mkdtempSync(join(tmpdir(), "typefully-cli-auth-"))
 
