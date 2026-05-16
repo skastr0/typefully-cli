@@ -49,6 +49,11 @@ describe("typefully discovery commands", () => {
           cache_dir_env: string
           default_cache_dir: string
         }
+        cache: {
+          env_var: string
+          ttl_env_var: string
+          cached_commands: string[]
+        }
         commands: Array<{
           command_id: string
           output?: { modes: string[] }
@@ -71,6 +76,13 @@ describe("typefully discovery commands", () => {
         auth_path_env: "TYPEFULLY_AUTH_PATH",
         cache_dir_env: "TYPEFULLY_CACHE_DIR",
         default_cache_dir: "~/.typefully/cache",
+      }),
+    )
+    expect(payload.data.cache).toEqual(
+      expect.objectContaining({
+        env_var: "TYPEFULLY_CACHE_DIR",
+        ttl_env_var: "TYPEFULLY_CACHE_TTL_SECONDS",
+        cached_commands: ["social-sets list", "social-sets get", "tags list"],
       }),
     )
     expect(payload.data.commands).toEqual(

@@ -7,6 +7,7 @@ import { Effect, Layer } from "effect"
 
 import { analyticsCommand } from "./commands/analytics"
 import { authCommand } from "./commands/auth"
+import { cacheCommand } from "./commands/cache"
 import {
   capabilitiesCommand,
   doctorCommand,
@@ -28,6 +29,7 @@ export const rootCommand = Command.make(CLI_NAME).pipe(
   Command.withDescription("JSON-first Typefully CLI powered by Effect"),
   Command.withSubcommands([
     authCommand,
+    cacheCommand,
     capabilitiesCommand,
     doctorCommand,
     examplesCommand,

@@ -1,7 +1,8 @@
 import { Args, Command, Options } from "@effect/cli"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 
 import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
+import type { TypefullyCacheOptions } from "../core/cache"
 import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
@@ -16,12 +17,40 @@ const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
   Options.withDescription("Output policy for potentially large responses: inline, artifact, or auto"),
 )
 
-const validatePagination = (field: "limit" | "offset", value: number | undefined) => {
+const refreshOption = Options.boolean("refresh", { ifPresent: true }).pipe(
+  Options.withDescription("Bypass the local response cache and fetch fresh Typefully data"),
+)
+
+const cacheTtlSecondsOption = Options.integer("cache-ttl-seconds").pipe(
+  Options.optional,
+  Options.withDescription("Freshness window used when reporting whether cached Typefully data is stale"),
+)
+
+const staleIfErrorOption = Options.boolean("stale-if-error", { ifPresent: true }).pipe(
+  Options.withDescription("Return stale cached Typefully data when a refresh request fails"),
+)
+
+const toUndefined = <A>(value: Option.Option<A>) =>
+  Option.isSome(value) ? value.value : undefined
+
+const cacheOptions = (options: {
+  readonly refresh: boolean
+  readonly cacheTtlSeconds?: Option.Option<number>
+  readonly staleIfError: boolean
+}): TypefullyCacheOptions => ({
+  refresh: options.refresh,
+  allowStaleOnError: options.staleIfError,
+  ...(options.cacheTtlSeconds !== undefined && Option.isSome(options.cacheTtlSeconds)
+    ? { maxAgeSeconds: options.cacheTtlSeconds.value }
+    : {}),
+})
+
+const validatePagination = (field: "limit" | "offset" | "cache_ttl_seconds", value: number | undefined) => {
   if (value === undefined) {
     return Effect.void
   }
 
-  if (field === "limit" && value <= 0) {
+  if ((field === "limit" || field === "cache_ttl_seconds") && value <= 0) {
     return Effect.fail(
       new CommandInputError({
         field,
@@ -61,17 +90,26 @@ const validateListInput = (input: SocialSetsListInput) =>
 
 const socialSetsListCommand = Command.make(
   "list",
-  { input: jsonInputArg, output: outputOption },
-  ({ input, output }) =>
+  {
+    input: jsonInputArg,
+    output: outputOption,
+    refresh: refreshOption,
+    cacheTtlSeconds: cacheTtlSecondsOption,
+    staleIfError: staleIfErrorOption,
+  },
+  ({ input, output, refresh, cacheTtlSeconds, staleIfError }) =>
     executeJsonCommand(
       "social-sets list",
       Effect.gen(function* () {
         const payload = yield* loadJsonInput(socialSetsListInputSchema, input)
+        const ttlSeconds = toUndefined(cacheTtlSeconds)
         yield* validateListInput(payload)
+        yield* validatePagination("cache_ttl_seconds", ttlSeconds)
 
         const socialSets = yield* listSocialSets({
           ...(payload.limit !== undefined ? { limit: payload.limit } : {}),
           ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
+          cache: cacheOptions({ refresh, cacheTtlSeconds, staleIfError }),
         })
 
         return yield* applyOutputPolicy({
@@ -88,18 +126,31 @@ const socialSetsListCommand = Command.make(
   Command.withDescription("List Typefully social sets from a JSON input object with optional pagination"),
 )
 
-const socialSetsGetCommand = Command.make("get", { input: jsonInputArg }, ({ input }) =>
-  executeJsonCommand(
-    "social-sets get",
-    Effect.gen(function* () {
-      const payload = yield* loadJsonInput(socialSetsGetInputSchema, input)
-      const socialSet = yield* getSocialSet({ socialSetId: payload.social_set_id })
+const socialSetsGetCommand = Command.make(
+  "get",
+  {
+    input: jsonInputArg,
+    refresh: refreshOption,
+    cacheTtlSeconds: cacheTtlSecondsOption,
+    staleIfError: staleIfErrorOption,
+  },
+  ({ input, refresh, cacheTtlSeconds, staleIfError }) =>
+    executeJsonCommand(
+      "social-sets get",
+      Effect.gen(function* () {
+        const payload = yield* loadJsonInput(socialSetsGetInputSchema, input)
+        const ttlSeconds = toUndefined(cacheTtlSeconds)
+        yield* validatePagination("cache_ttl_seconds", ttlSeconds)
+        const socialSet = yield* getSocialSet({
+          socialSetId: payload.social_set_id,
+          cache: cacheOptions({ refresh, cacheTtlSeconds, staleIfError }),
+        })
 
-      return {
-        social_set: socialSet,
-      }
-    }),
-  ),
+        return {
+          social_set: socialSet,
+        }
+      }),
+    ),
 ).pipe(
   Command.withDescription("Get a single social set from a JSON input object containing social_set_id"),
 )

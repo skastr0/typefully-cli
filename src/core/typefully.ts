@@ -3,8 +3,14 @@ import {
   HttpClient,
   HttpClientRequest,
 } from "@effect/platform"
-import { Effect, Schema } from "effect"
+import { Effect, Either, Schema } from "effect"
 
+import {
+  readCachedResponse,
+  writeCachedResponse,
+  type CacheRequestIdentity,
+  type TypefullyCacheOptions,
+} from "./cache"
 import { loadAppConfig, requireApiKey } from "./config"
 import { TYPEFULLY_USER_AGENT } from "./constants"
 import {
@@ -441,6 +447,7 @@ interface RequestSpec<A, I, R> {
   readonly query?: Record<string, string | undefined>
   readonly body?: unknown
   readonly responseSchema: Schema.Schema<A, I, R>
+  readonly cache?: TypefullyCacheOptions
 }
 
 type RawRequestSpec = Omit<RequestSpec<unknown, unknown, never>, "responseSchema">
@@ -550,67 +557,101 @@ const extractApiMessage = (status: number, body: unknown) => {
 
 export const requestTypefullyJson = <A, I, R>(spec: RequestSpec<A, I, R>) =>
   Effect.gen(function* () {
+    const rawSpec = toRawRequestSpec(spec)
+    const cacheRequest: CacheRequestIdentity | undefined = rawSpec.method === "GET"
+      ? rawSpec.query !== undefined
+        ? { method: rawSpec.method, path: rawSpec.path, query: compactQuery(rawSpec.query) ?? {} }
+        : { method: rawSpec.method, path: rawSpec.path }
+      : undefined
+    const cached = cacheRequest && spec.cache
+      ? yield* readCachedResponse(cacheRequest, spec.responseSchema, spec.cache.maxAgeSeconds)
+      : undefined
+
+    if (cached && !spec.cache?.refresh && cached.valid && cached.data !== null) {
+      return cached.data
+    }
+
     const client = yield* baseClient
-    const request = buildRequest(toRawRequestSpec(spec))
+    const request = buildRequest(rawSpec)
 
-    const response = yield* client.execute(request).pipe(
-      Effect.mapError(
-        (error) =>
-          new TypefullyRequestError({
+    const fetchLive = Effect.gen(function* () {
+      const response = yield* client.execute(request).pipe(
+        Effect.mapError(
+          (error) =>
+            new TypefullyRequestError({
+              method: spec.method,
+              path: spec.path,
+              reason: error._tag === "RequestError" ? error.reason : error._tag,
+              message: error.message,
+            }),
+        ),
+      )
+
+      const responseText = yield* response.text.pipe(
+        Effect.mapError(
+          (error) =>
+            new TypefullyRequestError({
+              method: spec.method,
+              path: spec.path,
+              reason: error.reason,
+              message: error.message,
+            }),
+        ),
+      )
+
+      if (response.status < 200 || response.status >= 300) {
+        const body = yield* parseResponseBody(responseText)
+
+        return yield* Effect.fail(
+          new TypefullyApiError({
             method: spec.method,
             path: spec.path,
-            reason: error._tag === "RequestError" ? error.reason : error._tag,
-            message: error.message,
+            status: response.status,
+            message: extractApiMessage(response.status, body),
+            body,
           }),
-      ),
-    )
+        )
+      }
 
-    const responseText = yield* response.text.pipe(
-      Effect.mapError(
-        (error) =>
-          new TypefullyRequestError({
-            method: spec.method,
-            path: spec.path,
-            reason: error.reason,
-            message: error.message,
-          }),
-      ),
-    )
-
-    if (response.status < 200 || response.status >= 300) {
-      const body = yield* parseResponseBody(responseText)
-
-      return yield* Effect.fail(
-        new TypefullyApiError({
-          method: spec.method,
-          path: spec.path,
-          status: response.status,
-          message: extractApiMessage(response.status, body),
-          body,
-        }),
-      )
-    }
-
-    if (responseText.trim().length === 0) {
-      return yield* Effect.fail(
-        new TypefullyDecodeError({
-          method: spec.method,
-          path: spec.path,
-          message: "Typefully returned an empty response body",
-        }),
-      )
-    }
-
-    return yield* Schema.decodeUnknown(Schema.parseJson(spec.responseSchema))(responseText).pipe(
-      Effect.mapError(
-        (error) =>
+      if (responseText.trim().length === 0) {
+        return yield* Effect.fail(
           new TypefullyDecodeError({
             method: spec.method,
             path: spec.path,
-            message: error.message,
+            message: "Typefully returned an empty response body",
           }),
-      ),
-    )
+        )
+      }
+
+      return yield* Schema.decodeUnknown(Schema.parseJson(spec.responseSchema))(responseText).pipe(
+        Effect.mapError(
+          (error) =>
+            new TypefullyDecodeError({
+              method: spec.method,
+              path: spec.path,
+              message: error.message,
+            }),
+        ),
+      )
+    })
+
+    const fetchedResult = yield* Effect.either(fetchLive)
+
+    if (Either.isLeft(fetchedResult)) {
+      if (cached && spec.cache?.allowStaleOnError !== false && cached.data !== null) {
+        return cached.data
+      }
+
+      return yield* Effect.fail(fetchedResult.left)
+    }
+
+    const fetched = fetchedResult.right
+
+    if (cacheRequest && spec.cache) {
+      yield* writeCachedResponse(cacheRequest, fetched)
+    }
+
+    return fetched
   })
 
 export const requestTypefullyNoContent = (spec: RawRequestSpec) =>
@@ -664,7 +705,11 @@ export const getMe = () =>
     responseSchema: TypefullyMeSchema,
   })
 
-export const listSocialSets = (params?: { readonly limit?: number; readonly offset?: number }) =>
+export const listSocialSets = (params?: {
+  readonly limit?: number
+  readonly offset?: number
+  readonly cache?: TypefullyCacheOptions
+}) =>
   requestTypefullyJson({
     method: "GET",
     path: "/social-sets",
@@ -673,23 +718,27 @@ export const listSocialSets = (params?: { readonly limit?: number; readonly offs
       offset: params?.offset !== undefined ? String(params.offset) : undefined,
     },
     responseSchema: SocialSetListResponseSchema,
+    ...(params?.cache ? { cache: params.cache } : {}),
   })
 
 const toPathId = (value: TypefullyIdentifier) => String(value)
 
 export const getSocialSet = (params: {
   readonly socialSetId: TypefullyIdentifier
+  readonly cache?: TypefullyCacheOptions
 }) =>
   requestTypefullyJson({
     method: "GET",
     path: `/social-sets/${toPathId(params.socialSetId)}/`,
     responseSchema: SocialSetDetailResponseSchema,
+    ...(params.cache ? { cache: params.cache } : {}),
   })
 
 export const listTags = (params: {
   readonly socialSetId: TypefullyIdentifier
   readonly limit?: number
   readonly offset?: number
+  readonly cache?: TypefullyCacheOptions
 }) =>
   requestTypefullyJson({
     method: "GET",
@@ -699,6 +748,7 @@ export const listTags = (params: {
       offset: params.offset !== undefined ? String(params.offset) : undefined,
     },
     responseSchema: TagListResponseSchema,
+    ...(params.cache ? { cache: params.cache } : {}),
   })
 
 export const createTag = (params: {

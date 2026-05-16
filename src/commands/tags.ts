@@ -1,7 +1,8 @@
 import { Args, Command, Options } from "@effect/cli"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 
 import { applyOutputPolicy, OUTPUT_MODE_VALUES } from "../core/artifacts"
+import type { TypefullyCacheOptions } from "../core/cache"
 import { CommandInputError } from "../core/errors"
 import { loadJsonInput } from "../core/json"
 import { executeJsonCommand } from "../core/output"
@@ -15,6 +16,34 @@ const outputOption = Options.choice("output", OUTPUT_MODE_VALUES).pipe(
   Options.withDefault("inline"),
   Options.withDescription("Output policy for potentially large responses: inline, artifact, or auto"),
 )
+
+const refreshOption = Options.boolean("refresh", { ifPresent: true }).pipe(
+  Options.withDescription("Bypass the local response cache and fetch fresh Typefully data"),
+)
+
+const cacheTtlSecondsOption = Options.integer("cache-ttl-seconds").pipe(
+  Options.optional,
+  Options.withDescription("Freshness window used when reporting whether cached Typefully data is stale"),
+)
+
+const staleIfErrorOption = Options.boolean("stale-if-error", { ifPresent: true }).pipe(
+  Options.withDescription("Return stale cached Typefully data when a refresh request fails"),
+)
+
+const cacheOptions = (options: {
+  readonly refresh: boolean
+  readonly cacheTtlSeconds?: Option.Option<number>
+  readonly staleIfError: boolean
+}): TypefullyCacheOptions => ({
+  refresh: options.refresh,
+  allowStaleOnError: options.staleIfError,
+  ...(options.cacheTtlSeconds !== undefined && Option.isSome(options.cacheTtlSeconds)
+    ? { maxAgeSeconds: options.cacheTtlSeconds.value }
+    : {}),
+})
+
+const toUndefined = <A>(value: Option.Option<A>) =>
+  Option.isSome(value) ? value.value : undefined
 
 export const tagsListInputSchema = Schema.Struct({
   social_set_id: TypefullyIdentifierSchema,
@@ -84,29 +113,41 @@ const validateTagsCreateInput = (input: TagsCreateInput) => {
   return Effect.void
 }
 
-const tagsListCommand = Command.make("list", { input: jsonInputArg, output: outputOption }, ({ input, output }) =>
-  executeJsonCommand(
-    "tags list",
-    Effect.gen(function* () {
-      const payload = yield* loadJsonInput(tagsListInputSchema, input)
-      yield* validateTagsListInput(payload)
+const tagsListCommand = Command.make(
+  "list",
+  {
+    input: jsonInputArg,
+    output: outputOption,
+    refresh: refreshOption,
+    cacheTtlSeconds: cacheTtlSecondsOption,
+    staleIfError: staleIfErrorOption,
+  },
+  ({ input, output, refresh, cacheTtlSeconds, staleIfError }) =>
+    executeJsonCommand(
+      "tags list",
+      Effect.gen(function* () {
+        const payload = yield* loadJsonInput(tagsListInputSchema, input)
+        const ttlSeconds = toUndefined(cacheTtlSeconds)
+        yield* validateTagsListInput(payload)
+        yield* validatePositiveInteger("cache_ttl_seconds", ttlSeconds)
 
-      const tags = yield* listTags({
-        socialSetId: payload.social_set_id,
-        ...(payload.limit !== undefined ? { limit: payload.limit } : {}),
-        ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
-      })
+        const tags = yield* listTags({
+          socialSetId: payload.social_set_id,
+          ...(payload.limit !== undefined ? { limit: payload.limit } : {}),
+          ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
+          cache: cacheOptions({ refresh, cacheTtlSeconds, staleIfError }),
+        })
 
-      return yield* applyOutputPolicy({
-        outputMode: output,
-        command: "tags list",
-        data: { tags },
-        artifactKey: "tags.list",
-        artifactLabel: "tags list response",
-        summary: `Wrote ${tags.results.length} records from tags list to an artifact.`,
-      })
-    }),
-  ),
+        return yield* applyOutputPolicy({
+          outputMode: output,
+          command: "tags list",
+          data: { tags },
+          artifactKey: "tags.list",
+          artifactLabel: "tags list response",
+          summary: `Wrote ${tags.results.length} records from tags list to an artifact.`,
+        })
+      }),
+    ),
 ).pipe(
   Command.withDescription("List tags for a social set from a JSON input object containing social_set_id"),
 )

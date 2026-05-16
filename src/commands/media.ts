@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises"
 import { basename } from "node:path"
 
-import { HttpClient } from "@effect/platform"
+import { FileSystem, HttpClient } from "@effect/platform"
 import { Args, Command, Options } from "@effect/cli"
 import { Effect, Schema } from "effect"
 
@@ -180,7 +180,7 @@ const pollMediaUntilReady = (params: {
 }) => {
   const deadline = Date.now() + params.timeoutSeconds * 1_000
 
-  const loop = (): Effect.Effect<MediaPollResult, unknown, HttpClient.HttpClient> =>
+  const loop = (): Effect.Effect<MediaPollResult, unknown, FileSystem.FileSystem | HttpClient.HttpClient> =>
     getMediaStatus({
       socialSetId: params.socialSetId,
       mediaId: params.mediaId,

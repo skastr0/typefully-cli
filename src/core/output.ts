@@ -3,6 +3,9 @@ import { Effect } from "effect"
 
 import {
   ArtifactWriteError,
+  CacheReadError,
+  CacheRemoveError,
+  CacheWriteError,
   CommandInputError,
   ConfigurationError,
   JsonInputError,
@@ -132,6 +135,19 @@ export const toErrorDetails = (error: unknown): ErrorEnvelope["error"] => {
       details: {
         path: error.path,
         hint: "Check that the artifact directory is writable or set TYPEFULLY_ARTIFACT_DIR.",
+        retryable: true,
+      },
+    }
+  }
+
+  if (error instanceof CacheReadError || error instanceof CacheWriteError || error instanceof CacheRemoveError) {
+    return {
+      type: error._tag,
+      message: redactSensitiveText(error.message),
+      details: {
+        path: error.path,
+        reason: error.reason,
+        hint: "Check that the cache directory is readable and writable or set TYPEFULLY_CACHE_DIR.",
         retryable: true,
       },
     }

@@ -39,6 +39,8 @@ export TYPEFULLY_HOME="$HOME/.typefully"
 export TYPEFULLY_AUTH_PATH="$HOME/.typefully/auth.json"
 # optional, defaults to ~/.typefully/cache
 export TYPEFULLY_CACHE_DIR="$HOME/.typefully/cache"
+# optional, defaults to 3600
+export TYPEFULLY_CACHE_TTL_SECONDS="3600"
 # optional, defaults to ~/.typefully/artifacts
 export TYPEFULLY_ARTIFACT_DIR="$HOME/.typefully/artifacts"
 ```
@@ -77,6 +79,7 @@ export TYPEFULLY_ARTIFACT_DIR="$HOME/.typefully/artifacts"
 - Batch mutation results include `outcome`, counts, `concurrency`, ordered `results`, and per-item `target` identifiers. The process exits with code `1` if any item fails.
 - PATCH payloads use **omit to leave unchanged** semantics. Prefer omission over `null`.
 - Potentially large reads support `--output inline|artifact|auto`. Artifact mode writes JSON under `~/.typefully/artifacts` by default; set `TYPEFULLY_ARTIFACT_DIR` to override it.
+- Stable read commands can reuse local response cache files under `~/.typefully/cache`. Pass `--refresh` to force a provider request, `--cache-ttl-seconds <n>` to change freshness reporting, and `--stale-if-error` to return cached data after a refresh failure.
 - Discovery commands expose the machine contract: `capabilities`, `doctor`, `schema list/show`, and `examples list/show`.
 - Typefully v2 does not expose documented idempotency keys. The CLI does not emulate durable mutation idempotency because doing so would overstate retry safety for create/update/delete calls.
 - `media upload` waits for `ready` by default. Set `wait_for_ready: false` to return right after the presigned PUT upload.
@@ -165,6 +168,15 @@ typefully auth local-status
 typefully auth status
 ```
 
+### `cache status` / `cache clear`
+
+Inspect or clear the local Typefully response cache.
+
+```bash
+typefully cache status
+typefully cache clear
+```
+
 ### `me`
 
 Fetch the current Typefully account via `/v2/me`.
@@ -179,6 +191,7 @@ List social sets from a JSON payload with optional `limit` and `offset`.
 
 ```bash
 typefully social-sets list @examples/social-sets/list.json
+typefully social-sets list @examples/social-sets/list.json --refresh
 ```
 
 ### `social-sets get`
@@ -195,6 +208,7 @@ List tags for a social set.
 
 ```bash
 typefully tags list @examples/tags/list.json
+typefully tags list @examples/tags/list.json --stale-if-error
 ```
 
 ### `tags create`

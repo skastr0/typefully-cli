@@ -41,6 +41,33 @@ export class ArtifactWriteError extends Schema.TaggedError<ArtifactWriteError>()
   },
 ) {}
 
+export class CacheReadError extends Schema.TaggedError<CacheReadError>()(
+  "CacheReadError",
+  {
+    path: Schema.String,
+    reason: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
+export class CacheWriteError extends Schema.TaggedError<CacheWriteError>()(
+  "CacheWriteError",
+  {
+    path: Schema.String,
+    reason: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
+export class CacheRemoveError extends Schema.TaggedError<CacheRemoveError>()(
+  "CacheRemoveError",
+  {
+    path: Schema.String,
+    reason: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
 export class MediaFileError extends Schema.TaggedError<MediaFileError>()(
   "MediaFileError",
   {
@@ -105,6 +132,9 @@ export type AppError =
   | JsonInputError
   | CommandInputError
   | ArtifactWriteError
+  | CacheReadError
+  | CacheWriteError
+  | CacheRemoveError
   | MediaFileError
   | MediaUploadError
   | MediaProcessingError

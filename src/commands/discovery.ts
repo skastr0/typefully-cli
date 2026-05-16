@@ -299,6 +299,18 @@ const discoveryCapabilities = [
     description: "Describe supported Typefully CLI protocol features and commands.",
   },
   {
+    command_id: "cache.status",
+    command: "cache status",
+    category: "diagnostic",
+    description: "Inspect the local Typefully response cache.",
+  },
+  {
+    command_id: "cache.clear",
+    command: "cache clear",
+    category: "diagnostic",
+    description: "Clear the local Typefully response cache.",
+  },
+  {
     command_id: "schema.list",
     command: "schema list",
     category: "discovery",
@@ -555,6 +567,14 @@ const capabilities = Effect.succeed({
     policy: "Use --output inline|artifact|auto on list, analytics, queue, and media diagnostic commands.",
     env_var: TYPEFULLY_ARTIFACT_DIR_ENV,
     default_location: "~/.typefully/artifacts",
+  },
+  cache: {
+    policy:
+      "Stable read commands can reuse schema-tagged local response cache files. Pass --refresh to force a provider request and --stale-if-error to return cached data after a refresh failure.",
+    env_var: TYPEFULLY_CACHE_DIR_ENV,
+    ttl_env_var: "TYPEFULLY_CACHE_TTL_SECONDS",
+    default_location: "~/.typefully/cache",
+    cached_commands: ["social-sets list", "social-sets get", "tags list"],
   },
   runtime_paths: {
     home_env: TYPEFULLY_HOME_ENV,
