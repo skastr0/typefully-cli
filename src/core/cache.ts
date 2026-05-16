@@ -1,5 +1,6 @@
 import { FileSystem } from "@effect/platform"
 import { createHash, randomUUID } from "node:crypto"
+import { chmodSync, lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { Effect, Either, Schema } from "effect"
@@ -189,6 +190,26 @@ const matchesRequest = (cached: CachedResponseFile, request: CacheRequestIdentit
   cached.request.path === request.path &&
   stableJson(cached.request.query) === stableJson(compactQuery(request.query))
 
+const ensurePrivateDirectory = (path: string) =>
+  Effect.try({
+    try: () => {
+      mkdirSync(path, { recursive: true, mode: 0o700 })
+      const stats = lstatSync(path)
+
+      if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        throw new Error(`Cache path is not a safe directory: ${path}`)
+      }
+
+      chmodSync(path, 0o700)
+    },
+    catch: (cause) =>
+      new CacheWriteError({
+        path,
+        reason: "FileSystem",
+        message: cause instanceof Error ? cause.message : "Failed to prepare cache directory",
+      }),
+  })
+
 export const readCachedResponse = Effect.fn("TypefullyCache.readCachedResponse")(function* <A, I, R>(
   request: CacheRequestIdentity,
   responseSchema: Schema.Schema<A, I, R>,
@@ -268,7 +289,6 @@ export const writeCachedResponse = Effect.fn("TypefullyCache.writeCachedResponse
   request: CacheRequestIdentity,
   data: unknown,
 ) {
-  const fileSystem = yield* FileSystem.FileSystem
   const config = yield* loadAppConfig()
   const apiKey = yield* requireApiKey()
   const location = yield* resolveLocation(request)
@@ -291,31 +311,33 @@ export const writeCachedResponse = Effect.fn("TypefullyCache.writeCachedResponse
   } satisfies CachedResponseFile
   const serialized = `${JSON.stringify(cacheFile, null, 2)}\n`
 
-  return yield* Effect.gen(function* () {
-    yield* fileSystem.makeDirectory(location.directory, { recursive: true })
-    yield* fileSystem.makeDirectory(location.snapshotDirectory, { recursive: true })
-    yield* fileSystem.writeFileString(tempPath, serialized)
-    yield* fileSystem.writeFileString(tempSnapshotPath, serialized)
-    yield* fileSystem.rename(tempPath, location.latestPath)
-    yield* fileSystem.rename(tempSnapshotPath, snapshotPath)
-  }).pipe(
-    Effect.mapError((error) =>
+  yield* ensurePrivateDirectory(location.directory)
+  yield* ensurePrivateDirectory(location.snapshotDirectory)
+
+  return yield* Effect.try({
+    try: () => {
+      try {
+        writeFileSync(tempPath, serialized, { encoding: "utf8", mode: 0o600, flag: "wx" })
+        writeFileSync(tempSnapshotPath, serialized, { encoding: "utf8", mode: 0o600, flag: "wx" })
+        chmodSync(tempPath, 0o600)
+        chmodSync(tempSnapshotPath, 0o600)
+        renameSync(tempPath, location.latestPath)
+        renameSync(tempSnapshotPath, snapshotPath)
+        chmodSync(location.latestPath, 0o600)
+        chmodSync(snapshotPath, 0o600)
+      } catch (error) {
+        rmSync(tempPath, { force: true })
+        rmSync(tempSnapshotPath, { force: true })
+        throw error
+      }
+    },
+    catch: (cause) =>
       new CacheWriteError({
         path: location.latestPath,
-        reason: platformErrorReason(error),
-        message: error.message,
+        reason: "FileSystem",
+        message: cause instanceof Error ? cause.message : "Failed to write cache response",
       }),
-    ),
-    Effect.tapError(() =>
-      Effect.all(
-        [
-          fileSystem.remove(tempPath).pipe(Effect.ignore),
-          fileSystem.remove(tempSnapshotPath).pipe(Effect.ignore),
-        ],
-        { discard: true },
-      ),
-    ),
-  )
+  })
 })
 
 export const getResponseCacheOverview = Effect.fn("TypefullyCache.getResponseCacheOverview")(function* () {

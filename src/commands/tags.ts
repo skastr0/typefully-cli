@@ -129,7 +129,7 @@ const tagsListCommand = Command.make(
         const payload = yield* loadJsonInput(tagsListInputSchema, input)
         const ttlSeconds = toUndefined(cacheTtlSeconds)
         yield* validateTagsListInput(payload)
-        yield* validatePositiveInteger("cache_ttl_seconds", ttlSeconds)
+        yield* validateNonNegativeInteger("cache_ttl_seconds", ttlSeconds)
 
         const tags = yield* listTags({
           socialSetId: payload.social_set_id,

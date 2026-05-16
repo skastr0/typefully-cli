@@ -346,6 +346,31 @@ describe("typefully CLI foundation", () => {
     expect(payload.data.details?.provider_body_omitted).toBe(true)
   })
 
+  test("TYPEFULLY_API_BASE_URL rejects embedded credentials", async () => {
+    const result = await runCli(["auth", "status"], {
+      TYPEFULLY_API_KEY: "test-token",
+      TYPEFULLY_API_BASE_URL: "https://user:pass@example.test/v2",
+    })
+    const payload = expectJson<{
+      ok: boolean
+      error: {
+        type: string
+        message: string
+        details?: {
+          field?: string
+        }
+      }
+    }>(result.stderr)
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stdout.trim()).toBe("")
+    expect(payload.ok).toBe(false)
+    expect(payload.error.type).toBe("ConfigurationError")
+    expect(payload.error.message).toBe("Base URL must not include credentials")
+    expect(payload.error.details?.field).toBe("TYPEFULLY_API_BASE_URL")
+    expect(result.stderr).not.toContain("user:pass")
+  })
+
   test("social-sets list forwards pagination to Typefully v2", async () => {
     const requests: string[] = []
     const server = Bun.serve({

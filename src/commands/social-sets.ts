@@ -50,7 +50,16 @@ const validatePagination = (field: "limit" | "offset" | "cache_ttl_seconds", val
     return Effect.void
   }
 
-  if ((field === "limit" || field === "cache_ttl_seconds") && value <= 0) {
+  if (!Number.isInteger(value)) {
+    return Effect.fail(
+      new CommandInputError({
+        field,
+        message: `${field} must be an integer`,
+      }),
+    )
+  }
+
+  if (field === "limit" && value <= 0) {
     return Effect.fail(
       new CommandInputError({
         field,
@@ -59,11 +68,11 @@ const validatePagination = (field: "limit" | "offset" | "cache_ttl_seconds", val
     )
   }
 
-  if (field === "offset" && value < 0) {
+  if ((field === "offset" || field === "cache_ttl_seconds") && value < 0) {
     return Effect.fail(
       new CommandInputError({
         field,
-        message: "offset must be a non-negative integer",
+        message: `${field} must be a non-negative integer`,
       }),
     )
   }

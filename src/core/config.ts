@@ -29,6 +29,11 @@ const normalizeBaseUrl = (rawValue: string): Effect.Effect<string, Configuration
       }
 
       const url = new URL(trimmed)
+
+      if (url.username || url.password) {
+        throw new Error("Base URL must not include credentials")
+      }
+
       url.pathname = url.pathname.replace(/\/$/, "")
 
       return url.toString().replace(/\/$/, "")

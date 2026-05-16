@@ -567,7 +567,7 @@ export const requestTypefullyJson = <A, I, R>(spec: RequestSpec<A, I, R>) =>
       ? yield* readCachedResponse(cacheRequest, spec.responseSchema, spec.cache.maxAgeSeconds)
       : undefined
 
-    if (cached && !spec.cache?.refresh && cached.valid && cached.data !== null) {
+    if (cached && !spec.cache?.refresh && cached.valid && cached.fresh && cached.data !== null) {
       return cached.data
     }
 
