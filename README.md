@@ -8,6 +8,17 @@ JSON-first Bun + Effect CLI for the [Typefully v2 API](https://support.typefully
 
 ## Install
 
+Once the npm package is published, install the Bun-native CLI package:
+
+```bash
+bunx @skastr0/typefully-cli <command>
+# or
+bun install -g @skastr0/typefully-cli
+typefully <command>
+```
+
+Until the first package release, build from source:
+
 ```bash
 # clone and build
 git clone https://github.com/skastr0/typefully-cli.git
