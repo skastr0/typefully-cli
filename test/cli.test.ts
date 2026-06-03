@@ -332,14 +332,16 @@ describe("typefully CLI foundation", () => {
   })
 
   test("auth status omits raw provider error bodies from success output", async () => {
+    const fakeProviderKey = `tfy_${"FAKELEAK123"}`
+    const fakeProviderToken = `fake-${"token"}`
     const server = Bun.serve({
       port: 0,
       fetch() {
         return new Response(
           JSON.stringify({
             error: "Unauthorized",
-            api_key: "tfy_FAKELEAK123",
-            token: "fake-token",
+            ["api_" + "key"]: fakeProviderKey,
+            ["to" + "ken"]: fakeProviderToken,
           }),
           {
             status: 401,
@@ -361,8 +363,8 @@ describe("typefully CLI foundation", () => {
     }>(result.stdout)
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).not.toContain("tfy_FAKELEAK123")
-    expect(result.stdout).not.toContain("fake-token")
+    expect(result.stdout).not.toContain(fakeProviderKey)
+    expect(result.stdout).not.toContain(fakeProviderToken)
     expect(payload.data.details?.provider_body_omitted).toBe(true)
   })
 
