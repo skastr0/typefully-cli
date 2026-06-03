@@ -2,9 +2,12 @@
   "name": "@skastr0/typefully-cli",
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "bun@1.3.11",
+  "packageManager": "bun@1.3.14",
   "bin": {
     "typefully": "src/cli.ts"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
   },
   "files": [
     "src",
@@ -12,6 +15,9 @@
     "scripts/build.ts",
     "scripts/install.ts",
     "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "SUPPORT.md",
     "LICENSE"
   ],
   "scripts": {
@@ -22,7 +28,7 @@
     "test": "bun test",
     "verify": "bun run typecheck && bun run test && bun run build",
     "pack:dry-run": "npm pack --dry-run",
-    "release:check": "bun run verify && bun run pack:dry-run && bun audit && publish-scan .",
+    "release:check": "bun run verify && bun run pack:dry-run && bun publish --dry-run --access public && bun audit",
     "publish:dry-run": "bun publish --dry-run --access public"
   },
   "dependencies": {
