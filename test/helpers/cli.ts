@@ -27,8 +27,8 @@ export const runCli = async (
     }).filter((entry): entry is [string, string] => entry[1] !== undefined),
   )
 
-  const subprocess = Bun.spawn(["bun", "run", "./src/cli.ts", ...args], {
-    cwd: "/Users/guilhermecastro/Projects/typefully-cli",
+  const subprocess = Bun.spawn([process.execPath, "run", "./src/cli.ts", ...args], {
+    cwd: process.cwd(),
     env: processEnv,
     stdin: options?.stdinText !== undefined ? new Blob([options.stdinText]) : "ignore",
     stdout: "pipe",
