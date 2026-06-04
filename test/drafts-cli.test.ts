@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { join } from "node:path"
 
 import { expectJson, runCli } from "./helpers/cli"
 
 const servers: Array<{ stop: () => void }> = []
 
 const examplePath = (name: string) => `@examples/drafts/${name}`
-const exampleFile = (name: string) =>
-  `/Users/guilhermecastro/Projects/typefully-cli/examples/drafts/${name}`
+const exampleFile = (name: string) => join(process.cwd(), "examples", "drafts", name)
 
 const draftDetailResponse = (overrides: Record<string, unknown> = {}) => ({
   id: 987,
