@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Publish npm packages
 
 on:
   workflow_dispatch:
@@ -33,27 +33,35 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
 
-      - name: Verify tag matches package version
+      - name: Verify tag matches release version
         run: |
           version="$(node -p "require('./package.json').version")"
           test "v${version}" = "${GITHUB_REF_NAME}"
 
       - run: bun install --frozen-lockfile
       - run: bun run verify
-      - run: npm pack --dry-run
+      - run: bun run build:npm-cli
+      - run: bun run pack:npm:dry-run
 
-      - name: Check whether this version is already published
-        id: published
+      - name: Publish packages
         run: |
-          name="$(node -p "require('./package.json').name")"
-          version="$(node -p "require('./package.json').version")"
-          if npm view "${name}@${version}" version --prefer-online >/dev/null 2>&1; then
-            echo "exists=true" >> "${GITHUB_OUTPUT}"
-            echo "${name}@${version} is already published; skipping npm publish."
-          else
-            echo "exists=false" >> "${GITHUB_OUTPUT}"
-          fi
+          set -euo pipefail
 
-      # Trusted publishing uses GitHub OIDC here; keep token env vars out of this workflow.
-      - if: steps.published.outputs.exists != 'true'
-        run: npm publish --access public
+          for package_dir in \
+            packages/npm/typefully-cli-darwin-arm64 \
+            packages/npm/typefully-cli-darwin-x64 \
+            packages/npm/typefully-cli-linux-arm64 \
+            packages/npm/typefully-cli-linux-x64 \
+            packages/npm/typefully-cli
+          do
+            package_name="$(node -p "require('./${package_dir}/package.json').name")"
+            package_version="$(node -p "require('./${package_dir}/package.json').version")"
+
+            if npm view "${package_name}@${package_version}" version --prefer-online >/dev/null 2>&1; then
+              echo "Skipping ${package_name}@${package_version}; already published."
+              continue
+            fi
+
+            echo "Publishing ${package_name}@${package_version} from ${package_dir}"
+            npm publish "./${package_dir}" --access public
+          done
