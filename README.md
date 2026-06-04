@@ -2,24 +2,27 @@
 
 JSON-first Bun + Effect CLI for the [Typefully v2 API](https://support.typefully.com/en/articles/8764053-the-typefully-api).
 
-typefully-cli is an experimental `0.x` CLI. The first npm release is Bun-native: the published `typefully` command points to a `#!/usr/bin/env bun` entrypoint, so Bun must be installed before running it.
+typefully-cli is an experimental `0.x` CLI. The npm package ships a Node launcher plus prebuilt Bun standalone binaries for macOS and Linux on arm64/x64.
 
 ## Requirements
 
-- [Bun](https://bun.sh) >= 1.3
+- npm runner install: Node.js >= 18 on macOS or Linux arm64/x64.
+- Source builds and local development: [Bun](https://bun.sh) >= 1.3.
 
 ## Install
 
-Once the npm package is published, install the Bun-native CLI package:
+Once the npm package is published, run or install the CLI package:
 
 ```bash
+npx -y @skastr0/typefully-cli <command>
+# or
 bunx @skastr0/typefully-cli <command>
 # or
-bun install -g @skastr0/typefully-cli
+pnpm dlx @skastr0/typefully-cli <command>
+# or
+npm install -g @skastr0/typefully-cli
 typefully <command>
 ```
-
-`npx` and `pnpm dlx` are not supported install paths for the first release because this package does not yet ship a Node launcher or per-platform npm binary packages.
 
 Until the first package release, build from source:
 

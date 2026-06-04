@@ -10,6 +10,7 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning f
 
 ### Added
 
-- Initial experimental Bun-native npm release of `@skastr0/typefully-cli`.
+- Initial experimental npm release of `@skastr0/typefully-cli`.
+- Node launcher package with optional platform packages for macOS and Linux on arm64/x64.
 - JSON-first command surface for Typefully auth, discovery, social sets, tags, drafts, queue, analytics, LinkedIn organization resolution, and media upload workflows.
 - Local auth, response cache, artifact output, schema discovery, executable examples, and structured error envelopes.
