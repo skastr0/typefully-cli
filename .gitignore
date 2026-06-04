@@ -2,3 +2,4 @@ node_modules/
 dist/
 .env
 .typefully/
+packages/npm/typefully-cli-*/bin/typefully

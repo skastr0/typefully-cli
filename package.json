@@ -1,35 +1,24 @@
 {
-  "name": "@skastr0/typefully-cli",
+  "name": "@skastr0/typefully-cli-repo",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
-  "bin": {
-    "typefully": "src/cli.ts"
-  },
-  "engines": {
-    "bun": ">=1.3.0"
-  },
-  "files": [
-    "src",
-    "examples",
-    "scripts/build.ts",
-    "scripts/install.ts",
-    "README.md",
-    "CHANGELOG.md",
-    "SECURITY.md",
-    "SUPPORT.md",
-    "LICENSE"
+  "workspaces": [
+    "packages/npm/*"
   ],
   "scripts": {
     "dev": "bun run ./src/cli.ts",
     "build": "bun scripts/build.ts",
+    "build:npm-cli": "bun scripts/build-npm-cli-packages.ts",
     "install:local": "bun scripts/install.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "verify": "bun run typecheck && bun run test && bun run build",
-    "pack:dry-run": "npm pack --dry-run",
-    "release:check": "bun run verify && bun run pack:dry-run && bun publish --dry-run --access public && bun audit",
-    "publish:dry-run": "bun publish --dry-run --access public"
+    "pack:dry-run": "bun run pack:npm:dry-run",
+    "pack:npm:dry-run": "npm pack --dry-run ./packages/npm/typefully-cli-darwin-arm64 ./packages/npm/typefully-cli-darwin-x64 ./packages/npm/typefully-cli-linux-arm64 ./packages/npm/typefully-cli-linux-x64 ./packages/npm/typefully-cli",
+    "release:check": "bun run verify && bun run build:npm-cli && bun run pack:npm:dry-run && bun audit",
+    "publish:dry-run": "bun run build:npm-cli && npm publish --dry-run --access public ./packages/npm/typefully-cli-darwin-arm64 && npm publish --dry-run --access public ./packages/npm/typefully-cli-darwin-x64 && npm publish --dry-run --access public ./packages/npm/typefully-cli-linux-arm64 && npm publish --dry-run --access public ./packages/npm/typefully-cli-linux-x64 && npm publish --dry-run --access public ./packages/npm/typefully-cli"
   },
   "dependencies": {
     "@effect/cli": "^0.75.1",

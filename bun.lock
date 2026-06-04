@@ -16,6 +16,35 @@
         "vitest": "^4.1.7",
       },
     },
+    "packages/npm/typefully-cli": {
+      "name": "@skastr0/typefully-cli",
+      "version": "0.1.0",
+      "bin": {
+        "typefully": "bin/typefully.js",
+      },
+      "optionalDependencies": {
+        "@skastr0/typefully-cli-darwin-arm64": "0.1.0",
+        "@skastr0/typefully-cli-darwin-x64": "0.1.0",
+        "@skastr0/typefully-cli-linux-arm64": "0.1.0",
+        "@skastr0/typefully-cli-linux-x64": "0.1.0",
+      },
+    },
+    "packages/npm/typefully-cli-darwin-arm64": {
+      "name": "@skastr0/typefully-cli-darwin-arm64",
+      "version": "0.1.0",
+    },
+    "packages/npm/typefully-cli-darwin-x64": {
+      "name": "@skastr0/typefully-cli-darwin-x64",
+      "version": "0.1.0",
+    },
+    "packages/npm/typefully-cli-linux-arm64": {
+      "name": "@skastr0/typefully-cli-linux-arm64",
+      "version": "0.1.0",
+    },
+    "packages/npm/typefully-cli-linux-x64": {
+      "name": "@skastr0/typefully-cli-linux-x64",
+      "version": "0.1.0",
+    },
   },
   "overrides": {
     "postcss": "^8.5.15",
@@ -133,6 +162,16 @@
     "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-v7qRI7gXLRINcOGXt+7YmAZ6iFuyZVMIoXAxhd8oP+DR9dLfL9GfNIx7PLMxmhZdvq8waUJBQiWN9EKNy+TRBQ=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+
+    "@skastr0/typefully-cli": ["@skastr0/typefully-cli@workspace:packages/npm/typefully-cli"],
+
+    "@skastr0/typefully-cli-darwin-arm64": ["@skastr0/typefully-cli-darwin-arm64@workspace:packages/npm/typefully-cli-darwin-arm64"],
+
+    "@skastr0/typefully-cli-darwin-x64": ["@skastr0/typefully-cli-darwin-x64@workspace:packages/npm/typefully-cli-darwin-x64"],
+
+    "@skastr0/typefully-cli-linux-arm64": ["@skastr0/typefully-cli-linux-arm64@workspace:packages/npm/typefully-cli-linux-arm64"],
+
+    "@skastr0/typefully-cli-linux-x64": ["@skastr0/typefully-cli-linux-x64@workspace:packages/npm/typefully-cli-linux-x64"],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 

@@ -1,0 +1,43 @@
+{
+  "name": "@skastr0/typefully-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "JSON-first Typefully content publishing and analytics CLI.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skastr0/typefully-cli.git",
+    "directory": "packages/npm/typefully-cli"
+  },
+  "homepage": "https://github.com/skastr0/typefully-cli#readme",
+  "bugs": {
+    "url": "https://github.com/skastr0/typefully-cli/issues"
+  },
+  "keywords": [
+    "typefully",
+    "cli",
+    "content",
+    "publishing",
+    "analytics"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "typefully": "bin/typefully.js"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@skastr0/typefully-cli-darwin-arm64": "0.1.0",
+    "@skastr0/typefully-cli-darwin-x64": "0.1.0",
+    "@skastr0/typefully-cli-linux-arm64": "0.1.0",
+    "@skastr0/typefully-cli-linux-x64": "0.1.0"
+  }
+}
